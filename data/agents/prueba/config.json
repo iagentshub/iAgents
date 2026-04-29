@@ -1,0 +1,15 @@
+{
+  "id": "prueba",
+  "name": "PRUEBA",
+  "description": "",
+  "connection_id": null,
+  "model": "",
+  "system_prompt": "",
+  "temperature": 0.7,
+  "max_tokens": null,
+  "skills": [],
+  "use_memory": false,
+  "memory_file": null,
+  "created_at": "2026-04-28T16:54:45.436077+00:00",
+  "updated_at": "2026-04-28T16:54:45.436077+00:00"
+}

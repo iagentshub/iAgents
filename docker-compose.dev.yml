@@ -1,0 +1,40 @@
+# docker-compose.dev.yml — Overrides para desarrollo local
+#
+# Usa rutas locales en lugar de GitHub para backend, frontend y skills.
+# Las rutas son relativas a este fichero (por defecto ../backend, ../frontend y ../skills).
+# Se pueden sobreescribir en .env con DEV_BACKEND_REPO, DEV_FRONTEND_REPO y DEV_SKILLS_REPO.
+#
+# Uso:
+#   ./gaia.sh start --dev
+#   ./gaia.sh update --dev
+
+services:
+
+  # En dev, data-init copia las skills desde el repo local en vez de clonar GitHub.
+  data-init:
+    volumes:
+      - ${DEV_SKILLS_REPO:-../skills}:/skills-src:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        echo '[data-init] Modo dev: sincronizando skills desde repo local...'
+        mkdir -p /data/skills/public /data/skills/private
+        SRC="/skills-src/public/$$SKILLS_LANG"
+        if [ -d "$$SRC" ]; then
+          cp -r "$$SRC"/. /data/skills/public/
+        else
+          cp -r /skills-src/public/. /data/skills/public/
+        fi
+        echo '[data-init] Listo.'
+
+  backend:
+    build:
+      context: "${DEV_BACKEND_REPO:-../backend}"
+    environment:
+      GAIA_RELOAD: "true"
+
+  frontend:
+    build:
+      context: "${DEV_FRONTEND_REPO:-../frontend}"

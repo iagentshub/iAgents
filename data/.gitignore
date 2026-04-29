@@ -1,0 +1,7 @@
+# Ficheros de runtime en la raíz
+settings.json
+users.json
+
+# Directorios gestionados por data-init (nunca versionar)
+skills/public/
+skills/private/

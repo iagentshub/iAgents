@@ -1,16 +1,35 @@
-## Hi there 👋
+<div align="center">
+  <a href="docs/en/index.md">🇬🇧 English</a> &nbsp;·&nbsp;
+  <a href="docs/es/index.md">🇪🇸 Español</a>
+</div>
 
-<!--
-**iagentshub/iagentshub** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+<br>
 
-Here are some ideas to get you started:
+<h1 align="center">iAgentsHub</h1>
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+<p align="center">AI agents platform. One command deploys the full stack.</p>
+
+---
+
+## Quick deploy
+
+```bash
+git clone https://github.com/iagentshub/iagentshub.git
+cd iagentshub
+cp .env.example .env
+# Edit .env — set GAIA_AGENTS_SECRET
+./gaia.sh start
+```
+
+Open `http://localhost`.
+
+---
+
+| | |
+|---|---|
+| 🇪🇸 Español | [docs/es/index.md](docs/es/index.md) |
+| 🇬🇧 English | [docs/en/index.md](docs/en/index.md) |
+
+---
+
+[MIT](LICENSE)

@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^gaia\.sh$
+
+  - repo: local
+    hooks:
+      - id: docker-compose-validate
+        name: Validate docker-compose.yml
+        entry: docker compose config
+        language: system
+        files: ^docker-compose.*\.yml$
+        pass_filenames: false

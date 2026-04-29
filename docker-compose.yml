@@ -1,0 +1,97 @@
+# iAgents Hub — Despliegue con Docker
+#
+# Solo necesitas este repositorio. Backend, frontend y skills se obtienen
+# automáticamente desde GitHub en cada `docker compose up --build`.
+#
+# Uso rápido:
+#   cp .env.example .env    # ajustar valores
+#   docker compose up -d --build
+
+services:
+
+  # ── Init: estructura de datos + skills ─────────────────────────────────────
+  # Contenedor efímero que corre antes que el backend.
+  # - Crea directorios y ficheros por defecto si no existen
+  # - Clona el repo de skills o lo actualiza si ya está clonado
+  data-init:
+    image: alpine/git:2.52.0
+    entrypoint: []
+    volumes:
+      - ./data:/data
+    environment:
+      SKILLS_REPO:          "${SKILLS_REPO:-https://github.com/iagentshub/skills.git}"
+      SKILLS_LANG:          "${SKILLS_LANG:-es}"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+
+        echo '[data-init] Creando estructura de directorios...'
+        mkdir -p /data/agents /data/connections /data/memory /data/skills/public /data/skills/private
+
+        if [ ! -f /data/settings.json ]; then
+          RANDOM_SECRET=$$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64)
+          printf '{"jwt_secret":"%s"}\n' "$$RANDOM_SECRET" > /data/settings.json
+          echo '[data-init] settings.json creado con secret aleatorio.'
+        fi
+
+        if [ ! -f /data/connections/connections.json ]; then
+          printf '[]\n' > /data/connections/connections.json
+          echo '[data-init] connections.json creado.'
+        fi
+
+        echo '[data-init] Clonando skills...'
+        SKILLS_TMP=$$(mktemp -d)
+        git clone --depth 1 "$$SKILLS_REPO" "$$SKILLS_TMP"
+
+        echo "[data-init] Sincronizando skills (idioma: $$SKILLS_LANG)..."
+        rm -rf /data/skills/public/*
+        SRC="$$SKILLS_TMP/public/$$SKILLS_LANG"
+        if [ -d "$$SRC" ]; then
+          cp -r "$$SRC"/. /data/skills/public/
+        else
+          cp -r "$$SKILLS_TMP/public"/. /data/skills/public/
+        fi
+        rm -rf "$$SKILLS_TMP"
+
+        echo '[data-init] Listo.'
+    restart: "no"
+
+  # ── Backend (FastAPI + uvicorn) ────────────────────────────────────────────
+  # Docker descarga el repo desde GitHub en cada --build → siempre actualizado.
+  backend:
+    build:
+      context: "${BACKEND_REPO:-https://github.com/iagentshub/backend.git}"
+    environment:
+      GAIA_DATA_DIR:      /data
+      GAIA_RELOAD:        "false"
+      GAIA_HOST:          "0.0.0.0"
+      GAIA_PORT:          "8765"
+      # El CORS no es necesario porque nginx hace de proxy en el mismo origen,
+      # pero se deja configurado por si alguien accede al backend directamente.
+      GAIA_CORS_ORIGINS:  "${GAIA_CORS_ORIGINS:-http://localhost}"
+      # Secreto JWT: establecer en .env; si no, se usa el de data/settings.json
+      GAIA_AGENTS_SECRET: "${GAIA_AGENTS_SECRET:-}"
+    volumes:
+      - ./data:/data:rw
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/auth/me')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Frontend (nginx sirviendo estáticos + proxy /api/) ────────────────────
+  frontend:
+    build:
+      context: "${FRONTEND_REPO:-https://github.com/iagentshub/frontend.git}"
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
