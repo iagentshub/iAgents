@@ -82,7 +82,7 @@ cmd_start() {
   ensure_env
   cd "$SCRIPT_DIR"
   inject_github_token
-  $DEV && info "Modo desarrollo — usando repos locales" || true
+  if $DEV; then info "Modo desarrollo — usando repos locales"; fi
   info "Construyendo e iniciando servicios..."
   $COMPOSE up -d --build
   PORT=$(get_port)
@@ -110,7 +110,7 @@ cmd_update() {
   ensure_env
   cd "$SCRIPT_DIR"
   inject_github_token
-  $DEV && info "Modo desarrollo — usando repos locales" || true
+  if $DEV; then info "Modo desarrollo — usando repos locales"; fi
   info "Actualizando a la última versión..."
   $COMPOSE down
   $COMPOSE up -d --build
