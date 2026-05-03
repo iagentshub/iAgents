@@ -21,6 +21,7 @@ services:
     environment:
       SKILLS_REPO:          "${SKILLS_REPO:-https://github.com/iagentshub/skills.git}"
       SKILLS_LANG:          "${SKILLS_LANG:-es}"
+      AGENTS_REPO:          "${AGENTS_REPO:-https://github.com/iagentshub/agents.git}"
     command:
       - /bin/sh
       - -c
@@ -28,7 +29,7 @@ services:
         set -e
 
         echo '[data-init] Creando estructura de directorios...'
-        mkdir -p /data/agents /data/connections /data/memory /data/skills/public /data/skills/private
+        mkdir -p /data/agents/public /data/agents/private /data/connections /data/memory /data/skills/public /data/skills/private
 
         if [ ! -f /data/settings.json ]; then
           RANDOM_SECRET=$$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64)
@@ -54,6 +55,15 @@ services:
           cp -r "$$SKILLS_TMP/public"/. /data/skills/public/
         fi
         rm -rf "$$SKILLS_TMP"
+
+        echo '[data-init] Clonando agentes públicos...'
+        AGENTS_TMP=$$(mktemp -d)
+        git clone --depth 1 "$$AGENTS_REPO" "$$AGENTS_TMP"
+
+        echo '[data-init] Sincronizando agentes públicos...'
+        rm -rf /data/agents/public/*
+        cp -r "$$AGENTS_TMP/public"/. /data/agents/public/
+        rm -rf "$$AGENTS_TMP"
 
         echo '[data-init] Listo.'
     restart: "no"
