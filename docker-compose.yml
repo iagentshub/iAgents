@@ -159,9 +159,21 @@ services:
       GAIA_RELOAD: "true"
       GAIA_HOST: "0.0.0.0"
       GAIA_PORT: "8765"
-      GAIA_CORS_ORIGINS: "http://localhost"
-      # ↓ CAMBIA ESTO por una cadena aleatoria segura (openssl rand -hex 32)
-      GAIA_AGENTS_SECRET: "263628a10976a4b85ef1bd4809587fbfc94c38f92c9b7a4474cfad3084585408"
+      # ↓ Pon el dominio exacto del frontend (sin barra final)
+      # Controla CORS, cookies seguras y OAuth redirect automáticamente.
+      GAIA_FRONTEND_URL: "https://tu-dominio.com"
+      # ↓ Genera con: openssl rand -hex 32  — NUNCA dejes este valor en el YAML público
+      GAIA_AGENTS_SECRET: ""
+      # ── Seguridad ────────────────────────────────────────────────────────────
+      # open | closed | invite
+      GAIA_REGISTRATION: "invite"
+      # Máximo de sesiones guest simultáneas
+      GAIA_MAX_GUEST_SESSIONS: "200"
+      # ── Google OAuth (opcional) ──────────────────────────────────────────────
+      GAIA_GOOGLE_CLIENT_ID: ""
+      GAIA_GOOGLE_CLIENT_SECRET: ""
+      GAIA_GOOGLE_REDIRECT_URI: ""
+      GAIA_ALLOWED_EMAILS: ""
     volumes:
       - iagentshub_backend:/app
       - iagentshub_data:/data

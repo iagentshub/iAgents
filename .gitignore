@@ -1,2 +1,5 @@
 # Variables de entorno — nunca subir al repo
 .env
+
+# Documentos de trabajo locales
+MEJORAS.txt

@@ -12,3 +12,8 @@ connections/
 memory/
 skills/
 accounts/
+
+# Base de datos SQLite (runtime, nunca versionar)
+hub.db
+hub.db-shm
+hub.db-wal

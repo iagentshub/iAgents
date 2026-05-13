@@ -21,6 +21,7 @@ All platform data is stored in the `data/` directory on the host. This directory
 | `connections/` | API keys for AI providers |
 | `memory/` | Memory files for each agent. Created and updated automatically after each conversation when the agent has memory enabled. |
 | `skills/` | Skills synced from the skills repository on every startup |
+| `knowledge.db` | SQLite database containing knowledge items (URLs and documents). Text is extracted when the item is saved and injected into the agent's system prompt at chat start. |
 
 ---
 

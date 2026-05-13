@@ -61,3 +61,8 @@ services:
   frontend:
     build:
       context: "${DEV_FRONTEND_REPO:-../frontend}"
+    volumes:
+      - type: bind
+        source: ${DEV_FRONTEND_REPO:-../frontend}
+        target: /usr/share/nginx/html
+        read_only: true
