@@ -126,7 +126,7 @@ services:
           sync_repo "$$FRONTEND_REPO" /frontend
         done
     healthcheck:
-      test: ["CMD", "test", "-f", "/backend/main.py"]
+      test: [ "CMD", "test", "-f", "/backend/main.py" ]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -143,7 +143,7 @@ services:
     volumes:
       - iagentshub_postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gaia -d iagentshub"]
+      test: [ "CMD-SHELL", "pg_isready -U gaia -d iagentshub" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -191,11 +191,6 @@ services:
       GAIA_EMAIL_VERIFY: "false"
       # Máximo de sesiones guest simultáneas
       GAIA_MAX_GUEST_SESSIONS: "200"
-      # ── Google OAuth (opcional) ──────────────────────────────────────────────
-      GAIA_GOOGLE_CLIENT_ID: ""
-      GAIA_GOOGLE_CLIENT_SECRET: ""
-      GAIA_GOOGLE_REDIRECT_URI: ""
-      GAIA_ALLOWED_EMAILS: ""
       # postgresql://gaia:password@postgres:5432/iagentshub — leave empty for SQLite
       DATABASE_URL: ""
       GAIA_DB_PASSWORD: ""
@@ -211,7 +206,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/auth/me'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
+      test: [ "CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/auth/me'); r=c.getresponse(); exit(0 if r.status<500 else 1)" ]
       interval: 30s
       timeout: 10s
       retries: 3
