@@ -72,3 +72,58 @@ Skills are synced on every startup from the skills repository. All other data is
 When an agent has memory enabled, the system automatically creates and maintains a memory file for that agent. After each conversation, the backend updates that file with the relevant facts extracted from the dialogue: user preferences, project context, decisions made, and any information the agent should recall in future sessions.
 
 In the next conversation, the contents of that file are automatically incorporated into the agent’s context, with no user intervention required.
+
+---
+
+## Team system
+
+### User roles
+
+| Role | Description |
+|------|-------------|
+| `admin` | Full access to the administration panel and all resources. |
+| `gestor` | Can create teams, invite members, and define granular permissions over their resources. |
+| `standard` | Normal user with access to their own resources. Promoted to `gestor` upon creating their first team. |
+| `guest` | Temporary session without an account. Limited access. |
+
+A `standard` user is automatically promoted to `gestor` when they create a team. If they delete all teams they manage, they revert to `standard`.
+
+### Data model
+
+Three additional database tables manage teams:
+
+- **`teams`** — Team name, creator, and creation date.
+- **`team_members`** — User–team relationship with a manager flag and granular JSON permissions.
+- **`team_invitations`** — Email invitations with status (`pending` / `accepted` / `rejected` / `expired`) and configurable expiry (48 h by default).
+
+### Granular permissions
+
+Each member’s permissions are stored as JSON in `team_members.permissions`. The structure is per resource type (`agents`, `connections`, `knowledge`) with a default policy (`deny` or `allow`) and per-resource overrides:
+
+```json
+{
+  "agents":      { "default": "deny", "items": { "agent-id": { "use": true } } },
+  "connections": { "default": "deny", "items": { "conn-id":  { "direct": false, "via_agent": true } } },
+  "knowledge":   { "default": "deny", "items": { "know-id":  { "view": true } } }
+}
+```
+
+Connections have two independent permission axes:
+- `direct` — the member can see and use the connection directly from the Connections page.
+- `via_agent` — when an allowed agent invokes this connection, access is permitted even if `direct` is `false`.
+
+### Invitation flow
+
+1. The manager sends an invitation from the panel (`/manager/`) → the system generates a token and sends an email with a link to `/profile/?tab=teams&token=…`.
+2. The invited user sees the invitation in **Profile → Teams** and accepts or rejects it.
+3. On acceptance, the user joins the team with empty permissions (default `deny` policy).
+4. The manager adjusts permissions from the modal in their panel.
+
+### Manager panel
+
+Managers have a dedicated panel at `/manager/` with two tabs:
+
+- **Team** — member table with actions (edit permissions, make manager, remove).
+- **Invitations** — send new invitations and cancel pending ones.
+
+The panel appears in the sidebar navigation only when `role === ‘gestor’` or `manages_teams === true` in the `/api/auth/me` response.
