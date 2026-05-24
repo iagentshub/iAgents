@@ -10,6 +10,16 @@
 
 services:
 
+  # ── Mailpit — servidor SMTP falso con UI web en http://localhost:8025 ──────
+  # Captura todos los correos enviados en dev sin enviarlos realmente.
+  # Para enviar correos reales, define GAIA_SMTP_HOST/USER/PASS en .env local.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # UI web
+      - "1025:1025"   # SMTP
+
   # En dev, data-init copia skills y agentes desde repos locales en vez de clonar GitHub.
   data-init:
     volumes:
@@ -70,6 +80,8 @@ services:
     depends_on:
       code-sync:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     build:
       context: "${DEV_BACKEND_REPO:-../backend}"
       dockerfile_inline: |
@@ -86,8 +98,22 @@ services:
     environment:
       GAIA_RELOAD: "true"
       GAIA_REGISTRATION: "open"
-      GAIA_ADMIN_EMAIL: "andresdavidh11@gmail.com"
+      GAIA_ADMIN_EMAIL: "admin@localhost.com"
       GAIA_ADMIN_RESET: ""
+      # ── SMTP ─────────────────────────────────────────────────────────────────
+      # Por defecto apunta a Mailpit (captura local, UI en http://localhost:8025).
+      # Para usar Dondominio real, añade en .env:
+      #   GAIA_SMTP_HOST=mail.dondominio.com
+      #   GAIA_SMTP_USER=no_reply@iagentshub.com
+      #   GAIA_SMTP_PASS=<contraseña del buzón>
+      GAIA_EMAIL_VERIFY: "${GAIA_EMAIL_VERIFY:-true}"
+      GAIA_SMTP_HOST: "${GAIA_SMTP_HOST:-mailpit}"
+      GAIA_SMTP_PORT: "${GAIA_SMTP_PORT:-1025}"
+      GAIA_SMTP_TLS: "${GAIA_SMTP_TLS:-}"
+      GAIA_SMTP_USER: "${GAIA_SMTP_USER:-}"
+      GAIA_SMTP_PASS: "${GAIA_SMTP_PASS:-}"
+      GAIA_SMTP_FROM: "${GAIA_SMTP_FROM:-no_reply@localhost.com}"
+      GAIA_WEBMAIL_URL: "${GAIA_WEBMAIL_URL:-http://localhost:8025}"
     volumes:
       - type: bind
         source: ${DEV_BACKEND_REPO:-../backend}

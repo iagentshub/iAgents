@@ -199,6 +199,22 @@ services:
       GAIA_REGISTRATION: "invite"
       # false → usuarios auto-verificados; true → envía correo de verificación
       GAIA_EMAIL_VERIFY: "false"
+      # ── SMTP (verificación de email y recuperación de contraseña) ────────────
+      # Dondominio: host=mail.dondominio.com  port=587  tls=starttls
+      # Deja GAIA_SMTP_HOST vacío para deshabilitar (tokens se loguean en consola).
+      GAIA_SMTP_HOST: ""
+      GAIA_SMTP_PORT: "587"
+      # Modo TLS: starttls (587, recomendado) | ssl (465) | none (25, solo redes internas)
+      GAIA_SMTP_TLS: "starttls"
+      GAIA_SMTP_USER: ""
+      GAIA_SMTP_PASS: ""
+      # Dirección "De:" del correo — si no se indica, se usa GAIA_SMTP_USER
+      GAIA_SMTP_FROM: ""
+      # URL del cliente de correo web (abre en nueva pestaña desde el panel admin)
+      # Ejemplos: Dondominio → https://webmail.dondominio.com | Mailpit dev → http://localhost:8025
+      GAIA_WEBMAIL_URL: ""
+      # Tiempo de validez del enlace de recuperación (horas)
+      GAIA_RESET_EXPIRE_HOURS: "1"
       # Máximo de sesiones guest simultáneas
       GAIA_MAX_GUEST_SESSIONS: "200"
       # postgresql://gaia:password@postgres:5432/iagentshub — leave empty for SQLite
