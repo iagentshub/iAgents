@@ -93,14 +93,15 @@ def test_settings_json_has_required_keys():
         assert key in settings, f"settings.json no tiene la clave {key!r}"
 
 
-def test_connections_json_exists():
-    assert (REPO_ROOT / "data" / "connections" / "connections.json").exists()
+def test_connections_dir_exists():
+    # connections.json was migrated to SQLite — only the directory is required
+    assert (REPO_ROOT / "data" / "connections").is_dir()
 
 
-# submodules
+# skills source
 
-def test_gitmodules_references_skills():
-    gitmodules = REPO_ROOT / ".gitmodules"
-    assert gitmodules.exists(), ".gitmodules no encontrado"
-    content = gitmodules.read_text(encoding="utf-8")
-    assert "skills" in content, ".gitmodules no referencia el submodulo de skills"
+def test_docker_compose_references_skills_repo():
+    # Skills are cloned at runtime by the data-init service, not via git submodules
+    compose_text = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "skills" in compose_text.lower(), "docker-compose.yml no referencia el repositorio de skills"
+    assert "SKILLS_REPO" in compose_text, "docker-compose.yml no define SKILLS_REPO"
