@@ -1,5 +1,13 @@
 # Variables de entorno — nunca subir al repo
 .env
+.venv
 
 # Documentos de trabajo locales
 MEJORAS.txt
+
+# Agentes y configuración local de Claude Code
+.claude/
+
+# Ficheros locales
+*.log
+*.pid
