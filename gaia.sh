@@ -106,10 +106,12 @@ _show_admin_info() {
   done
 
   local admin_email
+  # shellcheck disable=SC2016  # variables deben expandirse en el shell del contenedor, no en el local
   admin_email=$($COMPOSE exec -T backend sh -c 'printf "%s" "$GAIA_ADMIN_EMAIL"' 2>/dev/null | tr -d '\r\n') || true
   [ -z "$admin_email" ] && return
 
   local admin_pass
+  # shellcheck disable=SC2016  # variables deben expandirse en el shell del contenedor, no en el local
   admin_pass=$($COMPOSE exec -T backend sh -c 'cat "$GAIA_DATA_DIR/.admin_pass" 2>/dev/null' 2>/dev/null | tr -d '\r\n') || true
 
   echo
@@ -302,6 +304,7 @@ cmd_local_start() {
     cd "$SCRIPT_DIR/../backend"
     export GAIA_DATA_DIR="$DATA_DIR"
     export GAIA_HOST="127.0.0.1"
+    # shellcheck disable=SC2030
     export GAIA_PORT="$gaia_port"
     export GAIA_RELOAD="true"
     export GAIA_REGISTRATION="$registration"
@@ -320,6 +323,7 @@ cmd_local_start() {
   info "Arrancando frontend proxy en puerto ${port} ..."
   (
     export PORT="$port"
+    # shellcheck disable=SC2031
     export GAIA_PORT="$gaia_port"
     exec "$VENV_DIR/bin/python" "$SCRIPT_DIR/local_proxy.py"
   ) >> "$FRONTEND_LOG" 2>&1 &
@@ -334,9 +338,11 @@ cmd_local_stop() {
   local stopped=false
   _kill_pid "$BACKEND_PID_FILE"  && { info "Backend detenido.";  stopped=true; }
   _kill_pid "$FRONTEND_PID_FILE" && { info "Frontend detenido."; stopped=true; }
-  $stopped \
-    && success "Servicios locales detenidos." \
-    || info "No había servicios locales en ejecución."
+  if $stopped; then
+    success "Servicios locales detenidos."
+  else
+    info "No había servicios locales en ejecución."
+  fi
 }
 
 cmd_local_status() {
