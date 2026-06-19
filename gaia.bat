@@ -41,8 +41,10 @@ if "!DEV!"=="1" set "COMPOSE=docker compose -f docker-compose.yml -f docker-comp
 set "LOCAL_DIR=%SCRIPT_DIR%.gaia-local"
 set "BACKEND_PID_FILE=%LOCAL_DIR%\backend.pid"
 set "FRONTEND_PID_FILE=%LOCAL_DIR%\frontend.pid"
-set "BACKEND_LOG=%LOCAL_DIR%\backend.log"
-set "FRONTEND_LOG=%LOCAL_DIR%\frontend.log"
+set "BACKEND_LOG=%LOCAL_DIR%\backend.out.log"
+set "BACKEND_ERR=%LOCAL_DIR%\backend.err.log"
+set "FRONTEND_LOG=%LOCAL_DIR%\frontend.out.log"
+set "FRONTEND_ERR=%LOCAL_DIR%\frontend.err.log"
 set "VENV_DIR=%SCRIPT_DIR%.venv"
 set "PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "PIP=%VENV_DIR%\Scripts\pip.exe"
@@ -125,7 +127,7 @@ if "!LOCAL!"=="1" (
   :: Preparar variables de entorno para el backend
   set "GAIA_DATA_DIR=!DATA_DIR!"
   set "GAIA_HOST=127.0.0.1"
-  set "GAIA_RELOAD=true"
+  set "GAIA_RELOAD=false"
   set "GAIA_EMAIL_VERIFY=false"
   set "GAIA_SMTP_HOST="
   set "DATABASE_URL="
@@ -138,7 +140,7 @@ if "!LOCAL!"=="1" (
     echo $env:GAIA_DATA_DIR    = '!DATA_DIR!'
     echo $env:GAIA_HOST        = '127.0.0.1'
     echo $env:GAIA_PORT        = '!GAIA_PORT!'
-    echo $env:GAIA_RELOAD      = 'true'
+    echo $env:GAIA_RELOAD      = 'false'
     echo $env:GAIA_REGISTRATION= '!GAIA_REGISTRATION!'
     echo $env:GAIA_ADMIN_EMAIL = '!GAIA_ADMIN_EMAIL!'
     echo $env:GAIA_ADMIN_RESET = '!GAIA_ADMIN_RESET!'
@@ -147,7 +149,7 @@ if "!LOCAL!"=="1" (
     echo $env:GAIA_EMAIL_VERIFY= 'false'
     echo $env:GAIA_SMTP_HOST   = ''
     echo $env:DATABASE_URL     = ''
-    echo $p = Start-Process -FilePath '!PYTHON!' -ArgumentList 'main.py' -WorkingDirectory '!BACKEND_DIR!' -RedirectStandardOutput '!BACKEND_LOG!' -RedirectStandardError '!BACKEND_LOG!' -NoNewWindow -PassThru
+    echo $p = Start-Process -FilePath '!PYTHON!' -ArgumentList 'main.py' -WorkingDirectory '!BACKEND_DIR!' -RedirectStandardOutput '!BACKEND_LOG!' -RedirectStandardError '!BACKEND_ERR!' -NoNewWindow -PassThru
     echo $p.Id ^| Set-Content '!BACKEND_PID_FILE!'
   ) > "!LOCAL_DIR!\start_backend.ps1"
 
@@ -160,7 +162,7 @@ if "!LOCAL!"=="1" (
   (
     echo $env:PORT      = '!PORT!'
     echo $env:GAIA_PORT = '!GAIA_PORT!'
-    echo $p = Start-Process -FilePath '!PYTHON!' -ArgumentList '"!SCRIPT_DIR!local_proxy.py"' -RedirectStandardOutput '!FRONTEND_LOG!' -RedirectStandardError '!FRONTEND_LOG!' -NoNewWindow -PassThru
+    echo $p = Start-Process -FilePath '!PYTHON!' -ArgumentList '"!SCRIPT_DIR!local_proxy.py"' -RedirectStandardOutput '!FRONTEND_LOG!' -RedirectStandardError '!FRONTEND_ERR!' -NoNewWindow -PassThru
     echo $p.Id ^| Set-Content '!FRONTEND_PID_FILE!'
   ) > "!LOCAL_DIR!\start_frontend.ps1"
 
@@ -209,9 +211,11 @@ if "!LOCAL!"=="1" (
 :local_logs
   if not exist "!LOCAL_DIR!" mkdir "!LOCAL_DIR!"
   if not exist "!BACKEND_LOG!"  type nul > "!BACKEND_LOG!"
+  if not exist "!BACKEND_ERR!"  type nul > "!BACKEND_ERR!"
   if not exist "!FRONTEND_LOG!" type nul > "!FRONTEND_LOG!"
+  if not exist "!FRONTEND_ERR!" type nul > "!FRONTEND_ERR!"
   echo [gaia] Mostrando logs (Ctrl+C para salir)...
-  powershell -NoProfile -Command "Get-Content -Wait -Path '!BACKEND_LOG!','!FRONTEND_LOG!'"
+  powershell -NoProfile -Command "Get-Content -Wait -Path '!BACKEND_LOG!','!BACKEND_ERR!','!FRONTEND_LOG!','!FRONTEND_ERR!'"
   goto end
 
 :local_usage
