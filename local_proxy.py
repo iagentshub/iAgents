@@ -108,7 +108,15 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
             if idx.is_file():
                 return idx
 
-        # 3. @pages fallback: /pages/<path> y /pages/<path>/index.html
+        # 3. SPA fallback: rutas con parámetro en la URL (p.ej. /u/{username}).
+        #    Solo aplica cuando el último segmento no tiene extensión de fichero.
+        parts = clean.split("/")
+        if len(parts) >= 2 and "." not in parts[-1]:
+            spa = FRONTEND / "pages" / parts[0] / "index.html"
+            if spa.is_file():
+                return spa
+
+        # 4. @pages fallback: /pages/<path> y /pages/<path>/index.html
         pages = FRONTEND / "pages" / clean
         if pages.is_file():
             return pages
