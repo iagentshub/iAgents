@@ -75,30 +75,29 @@ In the next conversation, the contents of that file are automatically incorporat
 
 ---
 
-## Team system
+## Workspaces and collaboration
 
 ### User roles
 
 | Role | Description |
 |------|-------------|
 | `admin` | Full access to the administration panel and all resources. |
-| `gestor` | Can create teams, invite members, and define granular permissions over their resources. |
-| `standard` | Normal user with access to their own resources. Promoted to `gestor` upon creating their first team. |
+| `standard` | Normal user with access to their own resources. |
 | `guest` | Temporary session without an account. Limited access. |
-
-A `standard` user is automatically promoted to `gestor` when they create a team. If they delete all teams they manage, they revert to `standard`.
 
 ### Data model
 
-Three additional database tables manage teams:
+Every user has a **personal workspace** (virtual — id = username, no DB row). Team workspaces have their own rows:
 
-- **`teams`** — Team name, creator, and creation date.
-- **`team_members`** — User–team relationship with a manager flag and granular JSON permissions.
-- **`team_invitations`** — Email invitations with status (`pending` / `accepted` / `rejected` / `expired`) and configurable expiry (48 h by default).
+- **`workspaces`** — Name, creator, and creation date.
+- **`workspace_members`** — User–workspace relationship with role (`owner` / `admin` / `member`).
+- **`workspace_invitations`** — Username-based invitations with `pending` status.
+- **`workspace_groups`** / **`workspace_group_members`** — Groups within a workspace for resource sharing.
+- **`resource_groups`** — Resource–group relationship with permissions.
 
 ### Granular permissions
 
-Each member’s permissions are stored as JSON in `team_members.permissions`. The structure is per resource type (`agents`, `connections`, `knowledge`) with a default policy (`deny` or `allow`) and per-resource overrides:
+Permissions are managed at group level. The structure is per resource type with a default policy and overrides:
 
 ```json
 {
@@ -108,22 +107,22 @@ Each member’s permissions are stored as JSON in `team_members.permissions`. Th
 }
 ```
 
-Connections have two independent permission axes:
-- `direct` — the member can see and use the connection directly from the Connections page.
-- `via_agent` — when an allowed agent invokes this connection, access is permitted even if `direct` is `false`.
-
 ### Invitation flow
 
-1. The manager sends an invitation from the panel (`/manager/`) → the system generates a token and sends an email with a link to `/profile/?tab=teams&token=…`.
-2. The invited user sees the invitation in **Profile → Teams** and accepts or rejects it.
-3. On acceptance, the user joins the team with empty permissions (default `deny` policy).
-4. The manager adjusts permissions from the modal in their panel.
+1. The workspace owner invites a user from **Profile → Workspaces** by entering their username.
+2. The invitee sees the invitation under **Profile → Workspaces → Invitations** and accepts or rejects it.
+3. On acceptance, the user joins the workspace with the `member` role.
 
-### Manager panel
+### Ownership transfer
 
-Managers have a dedicated panel at `/manager/` with two tabs:
+An owner can transfer ownership to an existing member before deleting their account:
+`POST /api/workspaces/{id}/transfer-ownership` with `{ "username": "new_owner" }`.
 
-- **Team** — member table with actions (edit permissions, make manager, remove).
-- **Invitations** — send new invitations and cancel pending ones.
+### GDPR — right to erasure
 
-The panel appears in the sidebar navigation only when `role === ‘gestor’` or `manages_teams === true` in the `/api/auth/me` response.
+Users can request permanent account deletion from **Profile → Privacy**:
+
+- 30-day grace period with a cancellation link sent by email.
+- Workspace owners must transfer or delete their workspaces before requesting deletion.
+- The purge cascades: messages, conversations, knowledge, connections, tokens, agents, skills, and the user account.
+- Data export available at any time (`GET /api/auth/me/export` → ZIP).

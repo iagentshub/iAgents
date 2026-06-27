@@ -75,30 +75,29 @@ En la siguiente conversación, el contenido de ese fichero se incorpora al conte
 
 ---
 
-## Sistema de equipos
+## Workspaces y colaboración
 
 ### Roles de usuario
 
 | Rol | Descripción |
 |-----|-------------|
 | `admin` | Acceso total al panel de administración y a todos los recursos. |
-| `gestor` | Puede crear equipos, invitar miembros y definir permisos granulares sobre sus recursos. |
-| `standard` | Usuario normal con acceso a sus propios recursos. Se convierte en `gestor` al crear su primer equipo. |
+| `standard` | Usuario normal con acceso a sus propios recursos. |
 | `guest` | Sesión temporal sin cuenta. Acceso limitado. |
-
-Un usuario con rol `standard` asciende automáticamente a `gestor` al crear un equipo. Si elimina todos los equipos que gestiona, vuelve a `standard`.
 
 ### Modelo de datos
 
-Tres tablas adicionales en la base de datos gestionan los equipos:
+Cada usuario tiene un **workspace personal** virtual (id = username, sin fila en BD). Los workspaces de equipo tienen entrada propia:
 
-- **`teams`** — Nombre del equipo, creador y fecha de creación.
-- **`team_members`** — Relación usuario–equipo con flag de gestor y permisos JSON granulares.
-- **`team_invitations`** — Invitaciones por email con estado (`pending` / `accepted` / `rejected` / `expired`) y caducidad configurable (48 h por defecto).
+- **`workspaces`** — Nombre, creador y fecha de creación.
+- **`workspace_members`** — Relación usuario–workspace con rol (`owner` / `admin` / `member`).
+- **`workspace_invitations`** — Invitaciones por username con estado `pending`.
+- **`workspace_groups`** / **`workspace_group_members`** — Grupos dentro de un workspace para compartir recursos.
+- **`resource_groups`** — Relación recurso–grupo con permisos.
 
 ### Permisos granulares
 
-Los permisos de cada miembro se almacenan como JSON en `team_members.permissions`. La estructura es por tipo de recurso (`agents`, `connections`, `knowledge`) con una política por defecto (`deny` o `allow`) y excepciones por recurso individual:
+Los permisos se gestionan a nivel de grupo. La estructura es por tipo de recurso con política por defecto y excepciones:
 
 ```json
 {
@@ -108,22 +107,22 @@ Los permisos de cada miembro se almacenan como JSON en `team_members.permissions
 }
 ```
 
-Las conexiones tienen dos ejes de permiso independientes:
-- `direct` — el miembro ve y usa la conexión desde la página de Conexiones.
-- `via_agent` — cuando un agente permitido invoca esta conexión, el acceso se permite aunque `direct` sea `false`.
-
 ### Flujo de invitación
 
-1. El gestor envía una invitación desde el panel (`/manager/`) → el sistema genera un token y envía un email con un enlace a `/profile/?tab=teams&token=…`.
-2. El usuario invitado ve la invitación en **Perfil → Equipos** y la acepta o rechaza.
-3. Al aceptar, el usuario se incorpora al equipo con permisos vacíos (política `deny` por defecto).
-4. El gestor ajusta los permisos desde el modal de su panel.
+1. El propietario invita desde **Perfil → Workspaces** introduciendo el username del invitado.
+2. El invitado ve la invitación en **Perfil → Workspaces → Invitaciones** y la acepta o rechaza.
+3. Al aceptar, el usuario se incorpora al workspace con rol `member`.
 
-### Panel de gestor
+### Transferencia de propiedad
 
-Los gestores disponen de un panel dedicado en `/manager/` con dos pestañas:
+Un propietario puede transferir la titularidad a otro miembro antes de eliminar su cuenta:
+`POST /api/workspaces/{id}/transfer-ownership` con `{ "username": "nuevo_propietario" }`.
 
-- **Equipo** — tabla de miembros con acciones (editar permisos, hacer gestor, expulsar).
-- **Invitaciones** — envío de nuevas invitaciones y cancelación de las pendientes.
+### GDPR — derecho al olvido
 
-El panel aparece en la navegación lateral únicamente cuando `role === 'gestor'` o `manages_teams === true` en la respuesta de `/api/auth/me`.
+Los usuarios pueden solicitar la eliminación completa de su cuenta desde **Perfil → Privacidad**:
+
+- Período de gracia de 30 días con enlace de cancelación por email.
+- El propietario de workspaces debe transferirlos o eliminarlos antes de solicitar el borrado.
+- La purga elimina en cascada: mensajes, conversaciones, knowledge, conexiones, tokens, agentes, skills y la cuenta de usuario.
+- Exportación de datos disponible en cualquier momento (`GET /api/auth/me/export` → ZIP).
