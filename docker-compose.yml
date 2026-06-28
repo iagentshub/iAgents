@@ -156,7 +156,8 @@ services:
   # ── Backend (FastAPI + uvicorn) ────────────────────────────────────────────
   # La imagen solo contiene Python + dependencias.
   # El código de la app viene del volumen iagentshub_backend (gestionado por code-sync).
-  # GAIA_RELOAD=true → uvicorn detecta cambios en disco y recarga sin reiniciar.
+  # GAIA_RELOAD=false en producción — code-sync + reinicio del contenedor gestiona updates.
+  # GAIA_WORKERS controla los workers de uvicorn (default 4).
   # Si requirements.txt cambia, reconstruye la imagen (docker compose up --build backend).
   backend:
     logging:
@@ -182,7 +183,8 @@ services:
         CMD ["python", "main.py"]
     environment:
       GAIA_DATA_DIR: "/data"
-      GAIA_RELOAD: "true"
+      GAIA_RELOAD: "false"
+      GAIA_WORKERS: "4"
       GAIA_HOST: "0.0.0.0"
       GAIA_PORT: "8765"
       # ↓ Pon el dominio exacto del frontend (sin barra final)
