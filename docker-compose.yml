@@ -32,7 +32,7 @@ services:
         set -e
 
         echo '[data-init] Creando estructura de directorios...'
-        mkdir -p /data/agents/public /data/agents/private /data/connections /data/memory /data/skills/public /data/skills/private
+        mkdir -p /data/logs
 
         if [ ! -f /data/settings.json ]; then
           RANDOM_SECRET=$$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64)
@@ -40,44 +40,6 @@ services:
           echo '[data-init] settings.json creado con secret aleatorio.'
         fi
 
-        if [ ! -f /data/connections/connections.json ]; then
-          printf '[]\n' > /data/connections/connections.json
-          echo '[data-init] connections.json creado.'
-        fi
-
-        echo '[data-init] Clonando skills...'
-        SKILLS_TMP=$$(mktemp -d)
-        git clone --depth 1 "$$SKILLS_REPO" "$$SKILLS_TMP"
-
-        echo "[data-init] Sincronizando skills (idioma: $$SKILLS_LANG)..."
-        rm -rf /data/skills/public/*
-        SRC="$$SKILLS_TMP/public/$$SKILLS_LANG"
-        if [ -d "$$SRC" ]; then
-          cp -r "$$SRC"/. /data/skills/public/
-        else
-          cp -r "$$SKILLS_TMP/public"/. /data/skills/public/
-        fi
-        rm -rf "$$SKILLS_TMP"
-
-        if [ -n "$$AGENTS_REPO" ]; then
-          echo '[data-init] Clonando agentes públicos...'
-          AGENTS_TMP=$$(mktemp -d)
-          if git clone --depth 1 "$$AGENTS_REPO" "$$AGENTS_TMP" 2>/dev/null; then
-            echo '[data-init] Sincronizando agentes públicos...'
-            rm -rf /data/agents/public/*
-            AGENTS_SRC="$$AGENTS_TMP/public/$$SKILLS_LANG"
-            if [ -d "$$AGENTS_SRC" ]; then
-              cp -r "$$AGENTS_SRC"/. /data/agents/public/
-            elif [ -d "$$AGENTS_TMP/public" ]; then
-              cp -r "$$AGENTS_TMP/public"/. /data/agents/public/
-            else
-              cp -r "$$AGENTS_TMP"/. /data/agents/public/
-            fi
-          else
-            echo '[data-init] Aviso: no se pudo clonar AGENTS_REPO, se omiten agentes.'
-          fi
-          rm -rf "$$AGENTS_TMP"
-        fi
 
         echo '[data-init] Listo.'
     restart: "no"

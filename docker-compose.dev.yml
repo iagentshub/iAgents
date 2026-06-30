@@ -22,43 +22,16 @@ services:
 
   # En dev, data-init copia skills y agentes desde repos locales en vez de clonar GitHub.
   data-init:
-    volumes:
-      - type: bind
-        source: ${DEV_SKILLS_REPO:-../skills}
-        target: /skills-src
-        read_only: true
-      - type: bind
-        source: ${DEV_AGENTS_REPO:-../agents}
-        target: /agents-src
-        read_only: true
     command:
       - /bin/sh
       - -c
       - |
         set -e
         echo '[data-init] Modo dev: sincronizando skills y agentes desde repos locales...'
-        mkdir -p /data/skills/public /data/skills/private /data/agents/public /data/agents/private /data/connections /data/memory
+        mkdir -p /data/logs
         if [ ! -f /data/settings.json ]; then
           RANDOM_SECRET=$$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64)
           printf '{"jwt_secret":"%s"}\n' "$$RANDOM_SECRET" > /data/settings.json
-        fi
-        if [ ! -f /data/connections/connections.json ]; then
-          printf '[]\n' > /data/connections/connections.json
-        fi
-        SRC="/skills-src/public/$$SKILLS_LANG"
-        if [ -d "$$SRC" ]; then
-          cp -r "$$SRC"/. /data/skills/public/
-        else
-          cp -r /skills-src/public/. /data/skills/public/
-        fi
-        rm -rf /data/agents/public/*
-        AGENTS_SRC="/agents-src/public/$$SKILLS_LANG"
-        if [ -d "$$AGENTS_SRC" ]; then
-          cp -r "$$AGENTS_SRC"/. /data/agents/public/
-        elif [ -d /agents-src/public ]; then
-          cp -r /agents-src/public/. /data/agents/public/
-        else
-          cp -r /agents-src/. /data/agents/public/
         fi
         echo '[data-init] Listo.'
 
