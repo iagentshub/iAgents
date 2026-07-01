@@ -114,10 +114,16 @@ _show_admin_info() {
   # shellcheck disable=SC2016  # variables deben expandirse en el shell del contenedor, no en el local
   admin_pass=$($COMPOSE exec -T backend sh -c 'cat "$GAIA_DATA_DIR/.admin_pass" 2>/dev/null' 2>/dev/null | tr -d '\r\n') || true
 
+  local port gaia_port
+  port=$(get_port)
+  gaia_port=$(grep -E '^GAIA_PORT=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "8765")
+
   echo
   echo -e "${BOLD}  ╔══════════════════════════════════════════╗${RESET}"
   echo -e "${BOLD}  ║       Acceso de administrador            ║${RESET}"
   echo -e "${BOLD}  ╠══════════════════════════════════════════╣${RESET}"
+  echo -e "${BOLD}  ║${RESET}  Frontend   › ${CYAN}http://localhost:${port}${RESET}"
+  echo -e "${BOLD}  ║${RESET}  Backend    › ${CYAN}http://localhost:${gaia_port}${RESET}"
   echo -e "${BOLD}  ║${RESET}  Email      › ${CYAN}${admin_email}${RESET}"
   if [ -n "$admin_pass" ]; then
     echo -e "${BOLD}  ║${RESET}  Contraseña › ${GREEN}${admin_pass}${RESET}"

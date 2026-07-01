@@ -436,6 +436,8 @@ if "!LOCAL!"=="1" (
   echo   +------------------------------------------+
   echo   ^|      Acceso de administrador             ^|
   echo   +------------------------------------------+
+  echo   ^|  Frontend   -^> http://localhost:!PORT!
+  echo   ^|  Backend    -^> http://localhost:!GAIA_PORT!
   if defined SAI_EMAIL (
     echo   ^|  Email      : !SAI_EMAIL!
   ) else (
