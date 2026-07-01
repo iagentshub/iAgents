@@ -13,6 +13,8 @@
 
 ## Quick deploy
 
+**Linux / macOS**
+
 ```bash
 git clone https://github.com/iagentshub/iagentshub.git
 cd iagentshub
@@ -21,7 +23,27 @@ cp .env.example .env
 ./gaia.sh start
 ```
 
+**Windows**
+
+```bat
+git clone https://github.com/iagentshub/iagentshub.git
+cd iagentshub
+copy .env.example .env
+:: Edit .env — set GAIA_AGENTS_SECRET
+gaia.bat start
+```
+
 Open `http://localhost`.
+
+---
+
+## Local mode (no Docker)
+
+Si no tienes Docker instalado, también puedes arrancar la plataforma directamente en tu máquina sin contenedores usando la opción `--local` del script de arranque (`gaia.sh` en Linux/macOS o `gaia.bat` en Windows).
+
+```bash
+./gaia.sh start --local
+```
 
 ---
 
