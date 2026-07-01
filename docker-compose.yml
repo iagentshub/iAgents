@@ -226,7 +226,7 @@ services:
     volumes:
       - iagentshub_frontend:/usr/share/nginx/html
     ports:
-      - "8007:80"
+      - "${PORT:-8007}:80"
     depends_on:
       code-sync:
         condition: service_healthy
