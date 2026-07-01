@@ -87,6 +87,16 @@ services:
       GAIA_SMTP_PASS: "${GAIA_SMTP_PASS:-}"
       GAIA_SMTP_FROM: "${GAIA_SMTP_FROM:-no_reply@localhost.com}"
       GAIA_WEBMAIL_URL: "${GAIA_WEBMAIL_URL:-http://localhost:8025}"
+      # ── Stripe (facturación) ─────────────────────────────────────────────────
+      # Valores desde .env local. Modo test mientras desarrollas.
+      # El webhook secret sale de: stripe listen --forward-to localhost:8007/api/billing/webhook
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY:-}"
+      STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+      STRIPE_API_VERSION: "${STRIPE_API_VERSION:-2024-06-20}"
+      STRIPE_PRODUCT_SEATS: "${STRIPE_PRODUCT_SEATS:-}"
+      STRIPE_PRICE_SELFHOSTED_MONTHLY: "${STRIPE_PRICE_SELFHOSTED_MONTHLY:-}"
+      STRIPE_PRICE_SELFHOSTED_ANNUAL: "${STRIPE_PRICE_SELFHOSTED_ANNUAL:-}"
     volumes:
       - type: bind
         source: ${DEV_BACKEND_REPO:-../backend}
