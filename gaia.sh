@@ -304,6 +304,29 @@ cmd_local_start() {
   cors_origins=$(grep -E '^GAIA_CORS_ORIGINS=' "$SCRIPT_DIR/.env" 2>/dev/null \
     | cut -d= -f2 | tr -d '"' || echo "http://localhost:$port")
 
+  # ── Comprobación previa de puertos ──────────────────────────────────────
+  local port_conflict=false
+  if lsof -iTCP:"$port" -sTCP:LISTEN &>/dev/null; then
+    local occupant
+    occupant=$(lsof -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null \
+      | awk 'NR>1 {print $1"(PID "$2")"; exit}')
+    warn "El puerto ${port} ya está en uso por ${occupant}."
+    warn "El frontend local NO arrancará en ese puerto. Opciones:"
+    warn "  • Cambia PORT a otro valor en .env  (p.ej. PORT=8008)"
+    warn "  • Detén el proceso que ocupa el puerto y vuelve a ejecutar este comando"
+    port_conflict=true
+  fi
+  if lsof -iTCP:"$gaia_port" -sTCP:LISTEN &>/dev/null; then
+    local be_occupant
+    be_occupant=$(lsof -iTCP:"$gaia_port" -sTCP:LISTEN -n -P 2>/dev/null \
+      | awk 'NR>1 {print $1"(PID "$2")"; exit}')
+    warn "El puerto ${gaia_port} ya está en uso por ${be_occupant}."
+    warn "El backend local NO puede arrancar. Opciones:"
+    warn "  • Cambia GAIA_PORT en .env"
+    warn "  • Detén el proceso que ocupa el puerto y vuelve a ejecutar este comando"
+    error "Puerto del backend (${gaia_port}) ocupado. Abortando."
+  fi
+
   # ── Backend ──────────────────────────────────────────────────────────────
   info "Arrancando backend en puerto ${gaia_port} ..."
   (
@@ -326,17 +349,31 @@ cmd_local_start() {
   echo $! > "$BACKEND_PID_FILE"
 
   # ── Frontend proxy ───────────────────────────────────────────────────────
-  info "Arrancando frontend proxy en puerto ${port} ..."
-  (
-    export PORT="$port"
-    # shellcheck disable=SC2031
-    export GAIA_PORT="$gaia_port"
-    exec "$VENV_DIR/bin/python" "$SCRIPT_DIR/local_proxy.py"
-  ) >> "$FRONTEND_LOG" 2>&1 &
-  echo $! > "$FRONTEND_PID_FILE"
+  if ! $port_conflict; then
+    info "Arrancando frontend proxy en puerto ${port} ..."
+    (
+      export PORT="$port"
+      # shellcheck disable=SC2031
+      export GAIA_PORT="$gaia_port"
+      exec "$VENV_DIR/bin/python" "$SCRIPT_DIR/local_proxy.py"
+    ) >> "$FRONTEND_LOG" 2>&1 &
+    local proxy_pid=$!
+    echo $proxy_pid > "$FRONTEND_PID_FILE"
+    # Breve espera para detectar arranque fallido (p.ej. puerto ocupado en la raza)
+    sleep 0.8
+    if ! kill -0 "$proxy_pid" 2>/dev/null; then
+      rm -f "$FRONTEND_PID_FILE"
+      warn "El proxy del frontend no pudo arrancar. Revisa el log:"
+      warn "  tail $FRONTEND_LOG"
+    fi
+  fi
 
   success "Servicios locales arrancados."
   _local_show_info "$port" "$gaia_port" "$admin_email"
+  if $port_conflict; then
+    warn "ATENCIÓN: el frontend usa el puerto ${port} ocupado por otro proceso."
+    warn "Accede directamente al backend › http://localhost:${gaia_port}"
+  fi
   info "Logs → ./gaia.sh logs --local   |   Para detener → ./gaia.sh stop --local"
 }
 

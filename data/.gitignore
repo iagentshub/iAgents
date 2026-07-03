@@ -14,7 +14,10 @@ memory/
 skills/
 accounts/
 
-# Base de datos SQLite (runtime, nunca versionar)
+# Bases de datos SQLite (runtime, nunca versionar)
 hub.db
 hub.db-shm
 hub.db-wal
+logs.sqlite3
+logs.sqlite3-shm
+logs.sqlite3-wal

@@ -9,6 +9,7 @@ Variables de entorno:
   PORT        Puerto en el que escucha (default: 8007)
   GAIA_PORT   Puerto del backend (default: 8765)
 """
+
 from __future__ import annotations
 
 import http.server
@@ -23,31 +24,31 @@ from pathlib import Path
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 
-_HERE     = Path(__file__).parent.resolve()
-FRONTEND  = (_HERE / ".." / "frontend").resolve()
-PORT      = int(os.environ.get("PORT", "8007"))
-BACKEND   = f"http://127.0.0.1:{os.environ.get('GAIA_PORT', '8765')}"
+_HERE = Path(__file__).parent.resolve()
+FRONTEND = (_HERE / ".." / "frontend").resolve()
+PORT = int(os.environ.get("PORT", "8007"))
+BACKEND = f"http://127.0.0.1:{os.environ.get('GAIA_PORT', '8765')}"
 
 # Rutas que redireccionan (sin barra → con barra, o alias)
 _REDIRECT_302 = {
-    "/":                "/login/",
-    "/register":        "/register/",
-    "/verify":          "/verify/",
+    "/": "/login/",
+    "/register": "/register/",
+    "/verify": "/verify/",
     "/forgot-password": "/forgot-password/",
-    "/reset-password":  "/reset-password/",
-    "/docs":            "/docs/",
-    "/about":           "/about/",
+    "/reset-password": "/reset-password/",
+    "/docs": "/docs/",
+    "/about": "/about/",
 }
 _REDIRECT_301 = {
-    "/skills":  "/knowledge",
+    "/skills": "/knowledge",
     "/skills/": "/knowledge/",
 }
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
 
-class DevHandler(http.server.BaseHTTPRequestHandler):
 
+class DevHandler(http.server.BaseHTTPRequestHandler):
     # ── routing ───────────────────────────────────────────────────────────────
 
     def do_GET(self) -> None:
@@ -81,10 +82,17 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def do_POST(self)   -> None: self._api_or_405()
-    def do_PUT(self)    -> None: self._api_or_405()
-    def do_DELETE(self) -> None: self._api_or_405()
-    def do_PATCH(self)  -> None: self._api_or_405()
+    def do_POST(self) -> None:
+        self._api_or_405()
+
+    def do_PUT(self) -> None:
+        self._api_or_405()
+
+    def do_DELETE(self) -> None:
+        self._api_or_405()
+
+    def do_PATCH(self) -> None:
+        self._api_or_405()
 
     def _api_or_405(self) -> None:
         if urllib.parse.urlsplit(self.path).path.startswith("/api/"):
@@ -108,21 +116,24 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
             if idx.is_file():
                 return idx
 
-        # 3. SPA fallback: rutas con parámetro en la URL (p.ej. /u/{username}).
-        #    Solo aplica cuando el último segmento no tiene extensión de fichero.
-        parts = clean.split("/")
-        if len(parts) >= 2 and "." not in parts[-1]:
-            spa = FRONTEND / "pages" / parts[0] / "index.html"
-            if spa.is_file():
-                return spa
-
-        # 4. @pages fallback: /pages/<path> y /pages/<path>/index.html
+        # 3. @pages fallback: /pages/<path> y /pages/<path>/index.html
+        #    Se evalúa ANTES del SPA fallback para que rutas como /admin/metadata/
+        #    resuelvan a pages/admin/metadata/index.html y no a pages/admin/index.html.
         pages = FRONTEND / "pages" / clean
         if pages.is_file():
             return pages
         idx = pages / "index.html"
         if idx.is_file():
             return idx
+
+        # 4. SPA fallback: rutas con parámetro en la URL (p.ej. /u/{username}).
+        #    Solo aplica cuando el último segmento no tiene extensión de fichero y
+        #    no existe una página exacta en pages/ (ya comprobado en el paso 3).
+        parts = clean.split("/")
+        if len(parts) >= 2 and "." not in parts[-1]:
+            spa = FRONTEND / "pages" / parts[0] / "index.html"
+            if spa.is_file():
+                return spa
 
         return None
 
@@ -153,9 +164,9 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
     # ── API proxy (con soporte SSE) ────────────────────────────────────────────
 
     def _proxy(self) -> None:
-        url    = BACKEND + self.path
+        url = BACKEND + self.path
         length = int(self.headers.get("Content-Length") or 0)
-        body   = self.rfile.read(length) if length else None
+        body = self.rfile.read(length) if length else None
 
         req = urllib.request.Request(url, data=body, method=self.command)
         for k, v in self.headers.items():
@@ -194,8 +205,9 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
 
 # ── Server ────────────────────────────────────────────────────────────────────
 
+
 class _ThreadedServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-    daemon_threads    = True
+    daemon_threads = True
     allow_reuse_address = True
 
 
