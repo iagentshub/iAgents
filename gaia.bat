@@ -340,44 +340,15 @@ if "!LOCAL!"=="1" (
   exit /b 0
 
 :init_local_data
-  set "_LANG=es"
-  if exist "%SCRIPT_DIR%.env" (
-    for /f "usebackq tokens=1,* delims==" %%K in ("%SCRIPT_DIR%.env") do (
-      if "%%K"=="SKILLS_LANG" set "_LANG=%%L"
-    )
-  )
-
-  if not exist "!DATA_DIR!\agents\public"  mkdir "!DATA_DIR!\agents\public"
-  if not exist "!DATA_DIR!\agents\private" mkdir "!DATA_DIR!\agents\private"
-  if not exist "!DATA_DIR!\connections"    mkdir "!DATA_DIR!\connections"
-  if not exist "!DATA_DIR!\memory"         mkdir "!DATA_DIR!\memory"
-  if not exist "!DATA_DIR!\skills\public"  mkdir "!DATA_DIR!\skills\public"
-  if not exist "!DATA_DIR!\skills\private" mkdir "!DATA_DIR!\skills\private"
+  :: Solo garantizar que data\ existe; los subdirectorios de ficheros
+  :: (agents\, skills\, memory\, connections\) ya no se necesitan porque
+  :: toda la informacion esta en hub.db.
+  if not exist "!DATA_DIR!" mkdir "!DATA_DIR!"
 
   if not exist "!DATA_DIR!\settings.json" (
     for /f %%S in ('python -c "import secrets; print(secrets.token_hex(32))"') do set "_SECRET=%%S"
     echo {"jwt_secret": "!_SECRET!"} > "!DATA_DIR!\settings.json"
     echo [gaia] settings.json creado con secret aleatorio.
-  )
-
-  if not exist "!DATA_DIR!\connections\connections.json" (
-    echo [] > "!DATA_DIR!\connections\connections.json"
-  )
-
-  :: Skills locales
-  set "_SKILLS_BASE=%SCRIPT_DIR%..\skills"
-  if exist "!_SKILLS_BASE!\public\!_LANG!" (
-    xcopy /E /I /Y /Q "!_SKILLS_BASE!\public\!_LANG!\*" "!DATA_DIR!\skills\public\" >nul 2>&1
-  ) else if exist "!_SKILLS_BASE!\public" (
-    xcopy /E /I /Y /Q "!_SKILLS_BASE!\public\*" "!DATA_DIR!\skills\public\" >nul 2>&1
-  )
-
-  :: Agentes locales
-  set "_AGENTS_BASE=%SCRIPT_DIR%..\agents"
-  if exist "!_AGENTS_BASE!\public\!_LANG!" (
-    xcopy /E /I /Y /Q "!_AGENTS_BASE!\public\!_LANG!\*" "!DATA_DIR!\agents\public\" >nul 2>&1
-  ) else if exist "!_AGENTS_BASE!\public" (
-    xcopy /E /I /Y /Q "!_AGENTS_BASE!\public\*" "!DATA_DIR!\agents\public\" >nul 2>&1
   )
 
   echo [gaia] Directorio de datos listo: .\data\

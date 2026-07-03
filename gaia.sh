@@ -170,45 +170,16 @@ ensure_venv() {
 }
 
 init_local_data() {
-  local lang
-  lang=$(grep -E '^SKILLS_LANG=' "$SCRIPT_DIR/.env" 2>/dev/null \
-    | cut -d= -f2 | tr -d '"' || echo "es")
-
-  mkdir -p "$DATA_DIR/agents/public" "$DATA_DIR/agents/private" \
-           "$DATA_DIR/connections"   "$DATA_DIR/memory" \
-           "$DATA_DIR/skills/public" "$DATA_DIR/skills/private"
+  # Solo garantizar que data/ existe; los subdirectorios de ficheros
+  # (agents/, skills/, memory/, connections/) ya no se necesitan porque
+  # toda la información está en hub.db.
+  mkdir -p "$DATA_DIR"
 
   if [ ! -f "$DATA_DIR/settings.json" ]; then
     local secret
     secret=$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 64)
     printf '{"jwt_secret":"%s"}\n' "$secret" > "$DATA_DIR/settings.json"
     info "settings.json creado con secret aleatorio."
-  fi
-
-  if [ ! -f "$DATA_DIR/connections/connections.json" ]; then
-    printf '[]\n' > "$DATA_DIR/connections/connections.json"
-  fi
-
-  # Skills locales (si el directorio existe)
-  local skills_repo
-  skills_repo=$(grep -E '^DEV_SKILLS_REPO=' "$SCRIPT_DIR/.env" 2>/dev/null \
-    | cut -d= -f2 | tr -d '"' || echo "")
-  local skills_base="${skills_repo:-$SCRIPT_DIR/../skills}"
-  if [ -d "$skills_base/public/$lang" ]; then
-    cp -r "$skills_base/public/$lang/." "$DATA_DIR/skills/public/" 2>/dev/null || true
-  elif [ -d "$skills_base/public" ]; then
-    cp -r "$skills_base/public/." "$DATA_DIR/skills/public/" 2>/dev/null || true
-  fi
-
-  # Agentes locales (si el directorio existe)
-  local agents_repo
-  agents_repo=$(grep -E '^DEV_AGENTS_REPO=' "$SCRIPT_DIR/.env" 2>/dev/null \
-    | cut -d= -f2 | tr -d '"' || echo "")
-  local agents_base="${agents_repo:-$SCRIPT_DIR/../agents}"
-  if [ -d "$agents_base/public/$lang" ]; then
-    cp -r "$agents_base/public/$lang/." "$DATA_DIR/agents/public/" 2>/dev/null || true
-  elif [ -d "$agents_base/public" ]; then
-    cp -r "$agents_base/public/." "$DATA_DIR/agents/public/" 2>/dev/null || true
   fi
 
   info "Directorio de datos listo: ./data/"
