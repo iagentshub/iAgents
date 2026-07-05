@@ -152,14 +152,14 @@ docker compose up -d
 # ── Esperar a que el backend esté listo ───────────────────────────────────────
 info "Esperando que el backend arranque..."
 MAX=30; I=0
-until docker compose exec -T backend sh -c "exit 0" &>/dev/null; do
+until docker compose exec -T iagentshub sh -c "exit 0" &>/dev/null; do
   I=$((I+1)); [ $I -ge $MAX ] && break
   sleep 2
 done
 
 # ── Leer credenciales del admin ───────────────────────────────────────────────
-ADMIN_PASS=$(docker compose exec -T backend sh -c \
-  'cat "$GAIA_DATA_DIR/.admin_pass" 2>/dev/null' 2>/dev/null | tr -d '\r\n' || true)
+ADMIN_PASS=$(docker compose exec -T iagentshub sh -c \
+  'cat /data/.admin_pass 2>/dev/null' 2>/dev/null | tr -d '\r\n' || true)
 # shellcheck disable=SC1091
 source .env 2>/dev/null || true
 
