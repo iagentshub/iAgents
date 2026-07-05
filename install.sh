@@ -149,19 +149,21 @@ fi
 docker compose pull
 docker compose up -d
 
-# ── Esperar a que el backend esté listo ───────────────────────────────────────
+# ── Esperar a que el backend escriba .admin_pass ──────────────────────────────
 info "Esperando que el backend arranque..."
-MAX=30; I=0
-until docker compose exec -T iagentshub sh -c "exit 0" &>/dev/null; do
-  I=$((I+1)); [ $I -ge $MAX ] && break
-  sleep 2
+MAX=40; I=0
+until docker compose -f "${INSTALL_DIR}/docker-compose.yml" \
+    exec -T iagentshub sh -c 'test -f /data/.admin_pass' &>/dev/null; do
+  I=$((I+1)); [ $I -ge $MAX ] && { warn "Timeout esperando .admin_pass"; break; }
+  sleep 3
 done
 
 # ── Leer credenciales del admin ───────────────────────────────────────────────
-ADMIN_PASS=$(docker compose exec -T iagentshub sh -c \
-  'cat /data/.admin_pass 2>/dev/null' 2>/dev/null | tr -d '\r\n' || true)
+ADMIN_PASS=$(docker compose -f "${INSTALL_DIR}/docker-compose.yml" \
+  exec -T iagentshub sh -c 'cat /data/.admin_pass' 2>/dev/null \
+  | tr -d '\r\n' || true)
 # shellcheck disable=SC1091
-source .env 2>/dev/null || true
+source "${INSTALL_DIR}/.env" 2>/dev/null || true
 
 # ── Resumen final ─────────────────────────────────────────────────────────────
 echo
@@ -179,7 +181,7 @@ echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@lo
 if [ -n "${ADMIN_PASS:-}" ]; then
   echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
 else
-  echo -e "${BOLD}║${RESET}  Contraseña  › (sin cambios)"
+  echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ejecuta: docker compose exec iagentshub sh -c 'cat /data/.admin_pass'${RESET}"
 fi
 echo -e "${BOLD}║${RESET}  Directorio  › ${INSTALL_DIR}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
