@@ -70,6 +70,7 @@ services:
         CMD ["python", "main.py"]
     environment:
       GAIA_RELOAD: "true"
+      GAIA_FRONTEND_URL: "${GAIA_FRONTEND_URL:-http://localhost:8007}"
       GAIA_REGISTRATION: "open"
       GAIA_ADMIN_EMAIL: "admin@localhost.com"
       GAIA_ADMIN_RESET: ""
