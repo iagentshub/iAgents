@@ -1,22 +1,25 @@
 @echo off
 :: gaia.bat — gestión de iAgents Hub
-:: Uso: gaia.bat <comando> [--dev] [--local]
+:: Uso: gaia.bat <comando> [--dev] [--hub] [--local]
 ::
 ::   start    Arranca los servicios
 ::   stop     Detiene los servicios
 ::   logs     Muestra los logs en tiempo real
 ::   update   Actualiza a la última versión y reinicia  (solo Docker)
 ::   status   Estado de los servicios
+::   push     Construye las imágenes y las sube a Docker Hub
 ::
 :: Flags:
+::   --dev    Docker con repos locales (../backend, ../frontend) — hot reload
+::   --hub    Docker con imágenes pre-construidas de Docker Hub  — despliegue rápido
 ::   --local  Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)
 
 setlocal enabledelayedexpansion
 
-set "COMPOSE=docker compose"
 set "SCRIPT_DIR=%~dp0"
 set "LOCAL=0"
 set "DEV=0"
+set "HUB=0"
 
 :: ── Parseo de flags ────────────────────────────────────────────────────────
 set "CMD_ARG="
@@ -25,17 +28,36 @@ for %%A in (%*) do (
     set "LOCAL=1"
   ) else if /i "%%A"=="--dev" (
     set "DEV=1"
+  ) else if /i "%%A"=="--hub" (
+    set "HUB=1"
   ) else (
     if not defined CMD_ARG set "CMD_ARG=%%A"
   )
 )
 if "%CMD_ARG%"=="" set "CMD_ARG=%~1"
 
+:: Verificar combinaciones incompatibles
 if "!DEV!"=="1" if "!LOCAL!"=="1" (
   echo [gaia] ERROR: --dev y --local son incompatibles.
   exit /b 1
 )
-if "!DEV!"=="1" set "COMPOSE=docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+if "!DEV!"=="1" if "!HUB!"=="1" (
+  echo [gaia] ERROR: --dev y --hub son incompatibles.
+  exit /b 1
+)
+if "!LOCAL!"=="1" if "!HUB!"=="1" (
+  echo [gaia] ERROR: --local y --hub son incompatibles.
+  exit /b 1
+)
+
+:: Seleccionar compose según el modo
+if "!DEV!"=="1" (
+  set "COMPOSE=docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+) else if "!HUB!"=="1" (
+  set "COMPOSE=docker compose -f docker-compose.hub.yml"
+) else (
+  set "COMPOSE=docker compose"
+)
 
 :: ── Rutas modo local ───────────────────────────────────────────────────────
 set "LOCAL_DIR=%SCRIPT_DIR%.gaia-local"
@@ -66,6 +88,7 @@ if "!LOCAL!"=="1" (
   if "%CMD_ARG%"=="logs"   goto cmd_logs
   if "%CMD_ARG%"=="update" goto cmd_update
   if "%CMD_ARG%"=="status" goto cmd_status
+  if "%CMD_ARG%"=="push"   goto cmd_push
   goto usage
 )
 
@@ -240,12 +263,21 @@ if "!LOCAL!"=="1" (
   call :check_docker || exit /b 1
   call :ensure_env   || exit /b 0
   cd /d "%SCRIPT_DIR%"
-  echo [gaia] Construyendo e iniciando servicios...
-  %COMPOSE% rm -f data-init 2>nul || true
-  %COMPOSE% up -d --build
+  if "!DEV!"=="1" echo [gaia] Modo desarrollo -- usando repos locales
+  if "!HUB!"=="1" echo [gaia] Modo Hub -- usando imagenes de Docker Hub
+  if "!HUB!"=="1" (
+    echo [gaia] Descargando imagenes actualizadas...
+    !COMPOSE! pull
+    !COMPOSE! rm -f data-init 2>nul
+    !COMPOSE! up -d
+  ) else (
+    echo [gaia] Construyendo e iniciando servicios...
+    !COMPOSE! rm -f data-init 2>nul
+    !COMPOSE! up -d --build
+  )
   call :get_port
   echo.
-  echo [gaia] iAgents Hub en marcha -^> http://localhost:%PORT%
+  echo [gaia] iAgents Hub en marcha -^> http://localhost:!PORT!
   call :show_admin_info
   goto end
 
@@ -253,7 +285,7 @@ if "!LOCAL!"=="1" (
   call :check_docker || exit /b 1
   cd /d "%SCRIPT_DIR%"
   echo [gaia] Deteniendo servicios...
-  %COMPOSE% down
+  !COMPOSE! down
   echo [gaia] Servicios detenidos.
   goto end
 
@@ -261,27 +293,86 @@ if "!LOCAL!"=="1" (
   call :check_docker || exit /b 1
   cd /d "%SCRIPT_DIR%"
   echo [gaia] Mostrando logs (Ctrl+C para salir)...
-  %COMPOSE% logs -f --tail=100
+  !COMPOSE! logs -f --tail=100
   goto end
 
 :cmd_update
   call :check_docker || exit /b 1
   call :ensure_env   || exit /b 0
   cd /d "%SCRIPT_DIR%"
+  if "!DEV!"=="1" echo [gaia] Modo desarrollo -- usando repos locales
+  if "!HUB!"=="1" echo [gaia] Modo Hub -- descargando imagenes actualizadas de Docker Hub
   echo [gaia] Actualizando a la ultima version...
-  %COMPOSE% rm -f data-init 2>nul || true
-  %COMPOSE% down
-  %COMPOSE% up -d --build
+  !COMPOSE! rm -f data-init 2>nul
+  !COMPOSE! down
+  if "!HUB!"=="1" (
+    !COMPOSE! pull
+    !COMPOSE! up -d
+  ) else (
+    !COMPOSE! up -d --build
+  )
   call :get_port
   echo.
-  echo [gaia] Actualizacion completada -^> http://localhost:%PORT%
+  echo [gaia] Actualizacion completada -^> http://localhost:!PORT!
   call :show_admin_info
   goto end
 
 :cmd_status
   call :check_docker || exit /b 1
   cd /d "%SCRIPT_DIR%"
-  %COMPOSE% ps
+  !COMPOSE! ps
+  goto end
+
+:cmd_push
+  call :check_docker || exit /b 1
+  call :ensure_env   || exit /b 0
+  cd /d "%SCRIPT_DIR%"
+
+  :: Leer DOCKER_HUB_USER e IMAGE_TAG del .env
+  set "HUB_USER=iagenthub"
+  set "IMG_TAG=latest"
+  if exist ".env" (
+    for /f "usebackq tokens=1,* delims==" %%K in (".env") do (
+      if "%%K"=="DOCKER_HUB_USER" set "HUB_USER=%%L"
+      if "%%K"=="IMAGE_TAG"       set "IMG_TAG=%%L"
+    )
+  )
+  set "BACKEND_IMG=!HUB_USER!/backend:!IMG_TAG!"
+  set "FRONTEND_IMG=!HUB_USER!/frontend:!IMG_TAG!"
+  set "BE_PATH=%SCRIPT_DIR%..\backend"
+  set "FE_PATH=%SCRIPT_DIR%..\frontend"
+
+  echo [gaia] Construyendo imagen del backend -^> !BACKEND_IMG!
+  docker build -t "!BACKEND_IMG!" "!BE_PATH!"
+  if !errorlevel! neq 0 (
+    echo [gaia] ERROR: Fallo al construir la imagen del backend.
+    exit /b 1
+  )
+
+  echo [gaia] Construyendo imagen del frontend -^> !FRONTEND_IMG!
+  docker build -t "!FRONTEND_IMG!" "!FE_PATH!"
+  if !errorlevel! neq 0 (
+    echo [gaia] ERROR: Fallo al construir la imagen del frontend.
+    exit /b 1
+  )
+
+  echo [gaia] Subiendo imagenes a Docker Hub...
+  docker push "!BACKEND_IMG!"
+  if !errorlevel! neq 0 (
+    echo [gaia] ERROR: Fallo al subir la imagen del backend. Comprueba que has iniciado sesion con: docker login
+    exit /b 1
+  )
+  docker push "!FRONTEND_IMG!"
+  if !errorlevel! neq 0 (
+    echo [gaia] ERROR: Fallo al subir la imagen del frontend.
+    exit /b 1
+  )
+
+  echo.
+  echo [gaia] Imagenes publicadas en Docker Hub:
+  echo   * !BACKEND_IMG!
+  echo   * !FRONTEND_IMG!
+  echo [gaia] Para desplegar: gaia.bat start --hub  ^(en cualquier servidor con Docker^)
   goto end
 
 :: ══════════════════════════════════════════════════════════════════════════════
@@ -340,9 +431,7 @@ if "!LOCAL!"=="1" (
   exit /b 0
 
 :init_local_data
-  :: Solo garantizar que data\ existe; los subdirectorios de ficheros
-  :: (agents\, skills\, memory\, connections\) ya no se necesitan porque
-  :: toda la informacion esta en hub.db.
+  :: Solo garantizar que data\ existe; toda la informacion esta en hub.db.
   if not exist "!DATA_DIR!" mkdir "!DATA_DIR!"
 
   if not exist "!DATA_DIR!\settings.json" (
@@ -389,7 +478,7 @@ if "!LOCAL!"=="1" (
   set "SAI_PASS="
   set "SAI_TRIES=0"
   :_sai_wait
-  docker compose exec -T backend sh -c "exit 0" >nul 2>&1
+  !COMPOSE! exec -T backend sh -c "exit 0" >nul 2>&1
   if !errorlevel! equ 0 goto _sai_get
   if !SAI_TRIES! geq 30 goto _sai_print
   timeout /t 1 /nobreak >nul
@@ -397,12 +486,13 @@ if "!LOCAL!"=="1" (
   goto _sai_wait
 
   :_sai_get
-  for /f "usebackq delims=" %%E in (`docker compose exec -T backend sh -c "echo $GAIA_ADMIN_EMAIL" 2^>nul`) do (
+  for /f "usebackq delims=" %%E in (`!COMPOSE! exec -T backend sh -c "echo $GAIA_ADMIN_EMAIL" 2^>nul`) do (
     if not defined SAI_EMAIL set "SAI_EMAIL=%%E"
   )
-  for /f "usebackq delims=" %%P in (`docker compose exec -T backend sh -c "cat $GAIA_DATA_DIR/.admin_pass 2>/dev/null" 2^>nul`) do set "SAI_PASS=%%P"
+  for /f "usebackq delims=" %%P in (`!COMPOSE! exec -T backend sh -c "cat $GAIA_DATA_DIR/.admin_pass 2>/dev/null" 2^>nul`) do set "SAI_PASS=%%P"
 
   :_sai_print
+  call :get_port
   echo.
   echo   +------------------------------------------+
   echo   ^|      Acceso de administrador             ^|
@@ -425,16 +515,24 @@ if "!LOCAL!"=="1" (
 
 :usage
   echo.
-  echo Uso: gaia.bat ^<comando^> [--local]
+  echo Uso: gaia.bat ^<comando^> [--dev] [--hub] [--local]
   echo.
   echo   start    Arranca los servicios
   echo   stop     Detiene los servicios
   echo   logs     Muestra los logs en tiempo real
   echo   update   Actualiza a la ultima version y reinicia
   echo   status   Estado de los contenedores
+  echo   push     Construye imagenes y las sube a Docker Hub
   echo.
   echo Flags:
+  echo   --dev    Usa repos locales (../backend, ../frontend) con hot reload
+  echo   --hub    Usa imagenes pre-construidas de Docker Hub (despliegue rapido)
   echo   --local  Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)
+  echo.
+  echo Flujo recomendado para despliegues rapidos (--hub):
+  echo   1. En tu PC:      gaia.bat push              (construye y sube imagenes)
+  echo   2. En el servidor: gaia.bat start --hub      (descarga y arranca)
+  echo   3. Para actualizar: gaia.bat update --hub    (pull + reinicio)
   echo.
   exit /b 1
 

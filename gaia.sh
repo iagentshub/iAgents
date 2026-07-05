@@ -2,17 +2,19 @@
 # Si se invoca con `sh gaia.sh`, re-ejecutar con bash
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 # gaia.sh — gestión de iAgents Hub
-# Uso: ./gaia.sh <comando> [--dev] [--local]
+# Uso: ./gaia.sh <comando> [--dev] [--hub] [--local]
 #
 #   start    Arranca los servicios
 #   stop     Detiene los servicios
 #   logs     Muestra los logs en tiempo real
 #   update   Actualiza a la última versión y reinicia  (solo Docker)
 #   status   Estado de los servicios
+#   push     Construye las imágenes Docker y las sube a Docker Hub  (solo --hub)
 #
 # Flags:
-#   --dev    Docker con repos locales (../backend, ../frontend, ../skills)
-#   --local  Sin Docker: uvicorn + proxy Python (SQLite, no PostgreSQL)
+#   --dev    Docker con repos locales (../backend, ../frontend) — hot reload
+#   --hub    Docker con imágenes pre-construidas de Docker Hub   — producción rápida
+#   --local  Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)
 
 set -euo pipefail
 
@@ -21,23 +23,32 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ── Parseo de flags globales ───────────────────────────────────────────────────
 DEV=false
 LOCAL=false
+HUB=false
 ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --dev)   DEV=true   ;;
     --local) LOCAL=true ;;
+    --hub)   HUB=true   ;;
     *)       ARGS+=("$arg") ;;
   esac
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 if $DEV && $LOCAL; then
-  echo "[gaia] ERROR: --dev y --local son incompatibles." >&2
-  exit 1
+  echo "[gaia] ERROR: --dev y --local son incompatibles." >&2; exit 1
+fi
+if $DEV && $HUB; then
+  echo "[gaia] ERROR: --dev y --hub son incompatibles." >&2; exit 1
+fi
+if $LOCAL && $HUB; then
+  echo "[gaia] ERROR: --local y --hub son incompatibles." >&2; exit 1
 fi
 
 if $DEV; then
   COMPOSE="docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+elif $HUB; then
+  COMPOSE="docker compose -f docker-compose.hub.yml"
 else
   COMPOSE="docker compose"
 fi
@@ -387,15 +398,53 @@ cmd_local_logs() {
 
 # ── Comandos Docker ───────────────────────────────────────────────────────────
 
+cmd_push() {
+  check_docker
+  ensure_env
+  cd "$SCRIPT_DIR"
+
+  local hub_user tag
+  hub_user=$(grep -E '^DOCKER_HUB_USER=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "iagenthub")
+  tag=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "latest")
+
+  local backend_img="${hub_user}/backend:${tag}"
+  local frontend_img="${hub_user}/frontend:${tag}"
+
+  info "Construyendo imagen del backend → ${backend_img}"
+  docker build -t "$backend_img" "${DEV_BACKEND_REPO:-"$SCRIPT_DIR/../backend"}"
+
+  info "Construyendo imagen del frontend → ${frontend_img}"
+  docker build -t "$frontend_img" "${DEV_FRONTEND_REPO:-"$SCRIPT_DIR/../frontend"}"
+
+  info "Subiendo imágenes a Docker Hub..."
+  docker push "$backend_img"
+  docker push "$frontend_img"
+
+  echo
+  success "Imágenes publicadas en Docker Hub:"
+  success "  • ${backend_img}"
+  success "  • ${frontend_img}"
+  info "Para desplegar: ./gaia.sh start --hub  (en cualquier servidor con Docker)"
+}
+
 cmd_start() {
   check_docker
   ensure_env
   cd "$SCRIPT_DIR"
   inject_github_token
   if $DEV; then info "Modo desarrollo — usando repos locales"; fi
+  if $HUB; then info "Modo Hub — usando imágenes de Docker Hub"; fi
+  if $HUB; then
+    info "Descargando imágenes actualizadas..."
+    $COMPOSE pull
+  fi
   info "Construyendo e iniciando servicios..."
   $COMPOSE rm -f data-init 2>/dev/null || true
-  $COMPOSE up -d --build
+  if $HUB; then
+    $COMPOSE up -d
+  else
+    $COMPOSE up -d --build
+  fi
   PORT=$(get_port)
   echo
   success "iAgents Hub en marcha → http://localhost:${PORT}"
@@ -423,10 +472,16 @@ cmd_update() {
   cd "$SCRIPT_DIR"
   inject_github_token
   if $DEV; then info "Modo desarrollo — usando repos locales"; fi
+  if $HUB; then info "Modo Hub — descargando imágenes actualizadas de Docker Hub"; fi
   info "Actualizando a la última versión..."
   $COMPOSE rm -f data-init 2>/dev/null || true
   $COMPOSE down
-  $COMPOSE up -d --build
+  if $HUB; then
+    $COMPOSE pull
+    $COMPOSE up -d
+  else
+    $COMPOSE up -d --build
+  fi
   PORT=$(get_port)
   echo
   success "Actualización completada → http://localhost:${PORT}"
@@ -468,18 +523,26 @@ else
     logs)   cmd_logs   ;;
     update) cmd_update ;;
     status) cmd_status ;;
+    push)   cmd_push   ;;
     *)
-      echo -e "${BOLD}Uso:${RESET} ./gaia.sh <comando> [--dev] [--local]"
+      echo -e "${BOLD}Uso:${RESET} ./gaia.sh <comando> [--dev] [--hub] [--local]"
       echo
       echo "  start    Arranca los servicios"
       echo "  stop     Detiene los servicios"
       echo "  logs     Muestra los logs en tiempo real"
       echo "  update   Actualiza a la última versión y reinicia"
       echo "  status   Estado de los contenedores"
+      echo "  push     Construye imágenes y las sube a Docker Hub  (requiere --hub o sin flag)"
       echo
       echo -e "${BOLD}Flags:${RESET}"
-      echo "  --dev    Usa repos locales (../backend, ../frontend, ../skills) en lugar de GitHub"
+      echo "  --dev    Usa repos locales (../backend, ../frontend) con hot reload"
+      echo "  --hub    Usa imágenes pre-construidas de Docker Hub (despliegue rápido)"
       echo "  --local  Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)"
+      echo
+      echo -e "${BOLD}Flujo recomendado para despliegues rápidos (--hub):${RESET}"
+      echo "  1. En tu Mac:     ./gaia.sh push              # construye y sube imágenes"
+      echo "  2. En el servidor: ./gaia.sh start --hub      # descarga y arranca"
+      echo "  3. Para actualizar: ./gaia.sh update --hub    # pull + reinicio"
       echo
       exit 1
       ;;

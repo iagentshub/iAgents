@@ -1,0 +1,144 @@
+# docker-compose.hub.yml — Despliegue con imágenes pre-construidas de Docker Hub
+#
+# Usa las imágenes publicadas en Docker Hub en lugar de clonar desde GitHub.
+# El código va baked en la imagen — no hay code-sync ni volumes de código.
+#
+# Flujo típico:
+#   1. En tu máquina de desarrollo:  ./gaia.sh push
+#   2. En el servidor de producción: ./gaia.sh start --hub
+#   3. Para actualizar:              ./gaia.sh update --hub
+#
+# Variables relevantes en .env:
+#   DOCKER_HUB_USER  → cuenta de Docker Hub (default: iagenthub)
+#   IMAGE_TAG        → tag de la imagen (default: latest)
+#   GAIA_FRONTEND_URL, GAIA_AGENTS_SECRET, etc. — igual que en los demás modos
+
+services:
+
+  # ── Init: estructura de datos ───────────────────────────────────────────────
+  # Contenedor efímero que crea los directorios y settings.json si no existen.
+  # No clona repos — el código ya va dentro de las imágenes de Hub.
+  data-init:
+    image: alpine:3.20
+    volumes:
+      - iagentshub_data:/data
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        echo '[data-init] Creando estructura de datos...'
+        mkdir -p /data/logs
+        if [ ! -f /data/settings.json ]; then
+          SECRET=$$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64)
+          printf '{"jwt_secret":"%s"}\n' "$$SECRET" > /data/settings.json
+          echo '[data-init] settings.json creado con secret aleatorio.'
+        fi
+        echo '[data-init] Listo.'
+    restart: "no"
+
+  # ── PostgreSQL (opcional — activo cuando DATABASE_URL apunta a él) ──────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_DB: iagentshub
+      POSTGRES_USER: gaia
+      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:-changeme}"
+    volumes:
+      - iagentshub_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaia -d iagentshub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (FastAPI + uvicorn) ────────────────────────────────────────────
+  # Imagen pre-construida con el código baked in.
+  # Para actualizar: ./gaia.sh push  →  ./gaia.sh update --hub
+  backend:
+    image: ${DOCKER_HUB_USER:-iagenthub}/backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "15"
+    environment:
+      GAIA_DATA_DIR: "/data"
+      GAIA_RELOAD: "false"
+      GAIA_WORKERS: "4"
+      GAIA_HOST: "0.0.0.0"
+      GAIA_PORT: "8765"
+      GAIA_FRONTEND_URL: "${GAIA_FRONTEND_URL:-http://localhost:8007}"
+      GAIA_AGENTS_SECRET: "${GAIA_AGENTS_SECRET:-}"
+      GAIA_ADMIN_EMAIL: "${GAIA_ADMIN_EMAIL:-admin@localhost}"
+      GAIA_ADMIN_RESET: "${GAIA_ADMIN_RESET:-}"
+      GAIA_REGISTRATION: "${GAIA_REGISTRATION:-invite}"
+      GAIA_EMAIL_VERIFY: "${GAIA_EMAIL_VERIFY:-false}"
+      GAIA_SMTP_HOST: "${GAIA_SMTP_HOST:-}"
+      GAIA_SMTP_PORT: "${GAIA_SMTP_PORT:-587}"
+      GAIA_SMTP_TLS: "${GAIA_SMTP_TLS:-starttls}"
+      GAIA_SMTP_USER: "${GAIA_SMTP_USER:-}"
+      GAIA_SMTP_PASS: "${GAIA_SMTP_PASS:-}"
+      GAIA_SMTP_FROM: "${GAIA_SMTP_FROM:-}"
+      GAIA_WEBMAIL_URL: "${GAIA_WEBMAIL_URL:-}"
+      GAIA_RESET_EXPIRE_HOURS: "${GAIA_RESET_EXPIRE_HOURS:-1}"
+      GAIA_MAX_GUEST_SESSIONS: "${GAIA_MAX_GUEST_SESSIONS:-200}"
+      DATABASE_URL: "${DATABASE_URL:-}"
+      GAIA_DB_PASSWORD: "${GAIA_DB_PASSWORD:-}"
+      GAIA_TRUSTED_PROXIES: "${GAIA_TRUSTED_PROXIES:-127.0.0.1}"
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY:-}"
+      STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+      STRIPE_API_VERSION: "${STRIPE_API_VERSION:-2024-06-20}"
+      STRIPE_PRODUCT_SEATS: "${STRIPE_PRODUCT_SEATS:-}"
+      STRIPE_PRICE_SELFHOSTED_MONTHLY: "${STRIPE_PRICE_SELFHOSTED_MONTHLY:-}"
+      STRIPE_PRICE_SELFHOSTED_ANNUAL: "${STRIPE_PRICE_SELFHOSTED_ANNUAL:-}"
+    volumes:
+      - iagentshub_data:/data
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/auth/me'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Frontend (nginx sirviendo estáticos + proxy /api/) ────────────────────
+  # Imagen pre-construida: código + nginx.conf + docker-entrypoint.sh ya dentro.
+  # docker-entrypoint.sh inyecta API_BASE y STRIPE_PUBLISHABLE_KEY en config.js.
+  frontend:
+    image: ${DOCKER_HUB_USER:-iagenthub}/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "15"
+    environment:
+      API_BASE: ""
+      STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"
+    ports:
+      - "${PORT:-8007}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  iagentshub_data:
+  iagentshub_postgres:
