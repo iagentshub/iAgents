@@ -99,7 +99,7 @@ GAIA_ADMIN_EMAIL=${ADMIN_EMAIL}
 # GAIA_ADMIN_RESET=true
 
 # open | invite | closed
-GAIA_REGISTRATION=invite
+GAIA_REGISTRATION=closed
 GAIA_EMAIL_VERIFY=false
 
 # ── SMTP ─────────────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ GAIA_SMTP_FROM=
 GAIA_WEBMAIL_URL=
 GAIA_RESET_EXPIRE_HOURS=1
 
-GAIA_MAX_GUEST_SESSIONS=200
+GAIA_MAX_GUEST_SESSIONS=0
 
 # ── Base de datos ─────────────────────────────────────────────────────────────
 # Vacío = SQLite en /data/hub.db (recomendado para empezar)
