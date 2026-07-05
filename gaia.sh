@@ -407,24 +407,32 @@ cmd_push() {
   hub_user=$(grep -E '^DOCKER_HUB_USER=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "iagenthub")
   tag=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "latest")
 
-  local backend_img="${hub_user}/backend:${tag}"
-  local frontend_img="${hub_user}/frontend:${tag}"
+  local unified_img="${hub_user}/iagentshub:${tag}"
+  local backend_src="${DEV_BACKEND_REPO:-"$SCRIPT_DIR/../backend"}"
+  local frontend_src="${DEV_FRONTEND_REPO:-"$SCRIPT_DIR/../frontend"}"
 
-  info "Construyendo imagen del backend → ${backend_img}"
-  docker build -t "$backend_img" "${DEV_BACKEND_REPO:-"$SCRIPT_DIR/../backend"}"
+  # Preparar contexto de build en directorio temporal
+  _PUSH_TMPDIR=$(mktemp -d)
+  trap 'rm -rf "$_PUSH_TMPDIR"' EXIT
 
-  info "Construyendo imagen del frontend → ${frontend_img}"
-  docker build -t "$frontend_img" "${DEV_FRONTEND_REPO:-"$SCRIPT_DIR/../frontend"}"
+  info "Preparando contexto de build..."
+  cp -r "$backend_src"  "$_PUSH_TMPDIR/backend"
+  cp -r "$frontend_src" "$_PUSH_TMPDIR/frontend"
+  cp "$SCRIPT_DIR/Dockerfile.unified"    "$_PUSH_TMPDIR/Dockerfile"
+  cp "$SCRIPT_DIR/supervisord.conf"      "$_PUSH_TMPDIR/supervisord.conf"
+  cp "$SCRIPT_DIR/entrypoint-unified.sh" "$_PUSH_TMPDIR/entrypoint-unified.sh"
 
-  info "Subiendo imágenes a Docker Hub..."
-  docker push "$backend_img"
-  docker push "$frontend_img"
+  info "Construyendo imagen unificada → ${unified_img}"
+  docker build -t "$unified_img" "$_PUSH_TMPDIR"
+
+  info "Subiendo a Docker Hub..."
+  docker push "$unified_img"
 
   echo
-  success "Imágenes publicadas en Docker Hub:"
-  success "  • ${backend_img}"
-  success "  • ${frontend_img}"
+  success "Imagen publicada en Docker Hub:"
+  success "  • ${unified_img}"
   info "Para desplegar: ./gaia.sh start --hub  (en cualquier servidor con Docker)"
+  info "Instalación directa: curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh | bash"
 }
 
 cmd_start() {

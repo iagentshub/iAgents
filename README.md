@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.
 
 El script descarga la configuración, te pide el dominio y el email de administrador, y arranca la aplicación. Para actualizar, ejecuta el mismo comando.
 
-> **Docker Hub:** `iagenthub/backend` · `iagenthub/frontend`
+> **Docker Hub:** [`iagenthub/iagentshub`](https://hub.docker.com/r/iagenthub/iagentshub)
 
 ---
 

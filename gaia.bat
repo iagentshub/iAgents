@@ -337,42 +337,44 @@ if "!LOCAL!"=="1" (
       if "%%K"=="IMAGE_TAG"       set "IMG_TAG=%%L"
     )
   )
-  set "BACKEND_IMG=!HUB_USER!/backend:!IMG_TAG!"
-  set "FRONTEND_IMG=!HUB_USER!/frontend:!IMG_TAG!"
+  set "UNIFIED_IMG=!HUB_USER!/iagentshub:!IMG_TAG!"
   set "BE_PATH=%SCRIPT_DIR%..\backend"
   set "FE_PATH=%SCRIPT_DIR%..\frontend"
 
-  echo [gaia] Construyendo imagen del backend -^> !BACKEND_IMG!
-  docker build -t "!BACKEND_IMG!" "!BE_PATH!"
-  if !errorlevel! neq 0 (
-    echo [gaia] ERROR: Fallo al construir la imagen del backend.
+  :: Preparar contexto de build en directorio temporal
+  set "TMPDIR=%TEMP%\iagentshub_build_%RANDOM%"
+  mkdir "!TMPDIR!" || (echo [gaia] ERROR: No se pudo crear directorio temporal. & exit /b 1)
+
+  echo [gaia] Preparando contexto de build...
+  xcopy /E /I /Q "!BE_PATH!" "!TMPDIR!\backend\" >nul
+  if !errorlevel! neq 0 (echo [gaia] ERROR: Fallo al copiar backend. & rd /s /q "!TMPDIR!" & exit /b 1)
+  xcopy /E /I /Q "!FE_PATH!" "!TMPDIR!\frontend\" >nul
+  if !errorlevel! neq 0 (echo [gaia] ERROR: Fallo al copiar frontend. & rd /s /q "!TMPDIR!" & exit /b 1)
+  copy "%SCRIPT_DIR%Dockerfile.unified"    "!TMPDIR!\Dockerfile"         >nul
+  copy "%SCRIPT_DIR%supervisord.conf"      "!TMPDIR!\supervisord.conf"   >nul
+  copy "%SCRIPT_DIR%entrypoint-unified.sh" "!TMPDIR!\entrypoint-unified.sh" >nul
+
+  echo [gaia] Construyendo imagen unificada -^> !UNIFIED_IMG!
+  docker build -t "!UNIFIED_IMG!" "!TMPDIR!"
+  set "_BUILD_ERR=!errorlevel!"
+  rd /s /q "!TMPDIR!" >nul 2>&1
+  if !_BUILD_ERR! neq 0 (
+    echo [gaia] ERROR: Fallo al construir la imagen. Comprueba el Dockerfile.
     exit /b 1
   )
 
-  echo [gaia] Construyendo imagen del frontend -^> !FRONTEND_IMG!
-  docker build -t "!FRONTEND_IMG!" "!FE_PATH!"
+  echo [gaia] Subiendo imagen a Docker Hub...
+  docker push "!UNIFIED_IMG!"
   if !errorlevel! neq 0 (
-    echo [gaia] ERROR: Fallo al construir la imagen del frontend.
-    exit /b 1
-  )
-
-  echo [gaia] Subiendo imagenes a Docker Hub...
-  docker push "!BACKEND_IMG!"
-  if !errorlevel! neq 0 (
-    echo [gaia] ERROR: Fallo al subir la imagen del backend. Comprueba que has iniciado sesion con: docker login
-    exit /b 1
-  )
-  docker push "!FRONTEND_IMG!"
-  if !errorlevel! neq 0 (
-    echo [gaia] ERROR: Fallo al subir la imagen del frontend.
+    echo [gaia] ERROR: Fallo al subir la imagen. Comprueba que has iniciado sesion con: docker login
     exit /b 1
   )
 
   echo.
-  echo [gaia] Imagenes publicadas en Docker Hub:
-  echo   * !BACKEND_IMG!
-  echo   * !FRONTEND_IMG!
+  echo [gaia] Imagen publicada en Docker Hub:
+  echo   * !UNIFIED_IMG!
   echo [gaia] Para desplegar: gaia.bat start --hub  ^(en cualquier servidor con Docker^)
+  echo [gaia] Instalacion directa: curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh ^| bash
   goto end
 
 :: ══════════════════════════════════════════════════════════════════════════════
