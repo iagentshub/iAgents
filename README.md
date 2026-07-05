@@ -5,22 +5,41 @@
 
 <br>
 
-<h1 align="center">iAgentsHub</h1>
+<h1 align="center">iAgents Hub</h1>
 
-<p align="center">AI agents platform. One command deploys the full stack.</p>
+<p align="center">
+  Plataforma para crear, gestionar y compartir agentes de IA. Conecta tus propias claves de LLM, organiza los agentes en espacios de trabajo y despliega en un servidor propio en un solo comando.<br><br>
+  <em>Platform to create, manage and share AI agents. Connect your own LLM keys, organise agents in workspaces and self-host with a single command.</em>
+</p>
 
 ---
 
-## Quick deploy
+## Instalación rápida / Quick install
 
-**Linux / macOS**
+Solo necesitas Docker:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh | bash
+```
+
+El script descarga la configuración, te pide el dominio y el email de administrador, y arranca la aplicación. Para actualizar, ejecuta el mismo comando.
+
+> **Docker Hub:** `iagenthub/backend` · `iagenthub/frontend`
+
+---
+
+## Otros modos de despliegue / Other deploy modes
+
+**Linux / macOS — con repositorio clonado**
 
 ```bash
 git clone https://github.com/iagentshub/iagentshub.git
 cd iagentshub
-cp .env.example .env
-# Edit .env — set GAIA_AGENTS_SECRET
-./gaia.sh start
+cp .env.example .env   # edita GAIA_AGENTS_SECRET y GAIA_FRONTEND_URL
+./gaia.sh start        # Docker, imágenes de GitHub
+./gaia.sh start --hub  # Docker, imágenes de Docker Hub
+./gaia.sh start --dev  # Docker, código local con hot reload
+./gaia.sh start --local  # sin Docker (uvicorn + proxy Python)
 ```
 
 **Windows**
@@ -29,20 +48,7 @@ cp .env.example .env
 git clone https://github.com/iagentshub/iagentshub.git
 cd iagentshub
 copy .env.example .env
-:: Edit .env — set GAIA_AGENTS_SECRET
 gaia.bat start
-```
-
-Open `http://localhost`.
-
----
-
-## Local mode (no Docker)
-
-Si no tienes Docker instalado, también puedes arrancar la plataforma directamente en tu máquina sin contenedores usando la opción `--local` del script de arranque (`gaia.sh` en Linux/macOS o `gaia.bat` en Windows).
-
-```bash
-./gaia.sh start --local
 ```
 
 ---
