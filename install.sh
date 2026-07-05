@@ -11,6 +11,11 @@
 
 set -euo pipefail
 
+# Cuando el script se ejecuta via "curl | bash", stdin es el pipe del script.
+# Cualquier comando que lea stdin (docker exec, etc.) consumiría el resto del
+# script y bash dejaría de ejecutarlo. Cerramos stdin aquí para evitarlo.
+exec </dev/null
+
 # ── Colores ───────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
   GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'
