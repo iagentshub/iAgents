@@ -11,11 +11,6 @@
 
 set -euo pipefail
 
-# Cuando el script se ejecuta via "curl | bash", stdin es el pipe del script.
-# Cualquier comando que lea stdin (docker exec, etc.) consumiría el resto del
-# script y bash dejaría de ejecutarlo. Cerramos stdin aquí para evitarlo.
-exec </dev/null
-
 # ── Colores ───────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
   GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'
@@ -32,6 +27,7 @@ error()   { echo -e "${RED}${BOLD}[iagentshub]${RESET} $*" >&2; exit 1; }
 GITHUB_RAW="https://raw.githubusercontent.com/iagentshub/iagentshub/main"
 COMPOSE_URL="${GITHUB_RAW}/docker-compose.hub.yml"
 INSTALL_DIR="${IAGENTSHUB_DIR:-$HOME/iagentshub}"
+COMPOSE_FILE="${INSTALL_DIR}/docker-compose.yml"
 
 echo
 echo -e "${BOLD}╔══════════════════════════════════════════╗${RESET}"
@@ -71,7 +67,7 @@ if $FIRST_INSTALL; then
   info "Configurando variables de entorno..."
   echo
 
-  # Leer dominio público
+  # Leer dominio público (solo si stdin es un terminal)
   if [ -t 0 ]; then
     read -rp "  Dominio público (ej: https://miapp.com) [http://localhost:8007]: " INPUT_URL
     read -rp "  Email del administrador [admin@localhost]: " INPUT_EMAIL
@@ -82,7 +78,7 @@ if $FIRST_INSTALL; then
   PORT="${INPUT_PORT:-8007}"
 
   # Generar secreto JWT aleatorio
-  AGENTS_SECRET=$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c 64 \
+  AGENTS_SECRET=$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64 \
     || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
     || date +%s%N | sha256sum | head -c 64)
 
@@ -107,7 +103,7 @@ GAIA_REGISTRATION=invite
 GAIA_EMAIL_VERIFY=false
 
 # ── SMTP ─────────────────────────────────────────────────────────────────────
-# Vacío = desactivado (los tokens de reset se muestran en: docker compose logs backend)
+# Vacío = desactivado (los tokens de reset se muestran en: docker logs iagentshub-iagentshub-1)
 GAIA_SMTP_HOST=
 GAIA_SMTP_PORT=587
 GAIA_SMTP_TLS=starttls
@@ -148,32 +144,35 @@ if $FIRST_INSTALL; then
   info "Descargando imágenes de Docker Hub..."
 else
   info "Descargando imágenes actualizadas de Docker Hub..."
-  docker compose down
+  docker compose -f "${COMPOSE_FILE}" down
 fi
 
-docker compose pull
-docker compose up -d
+docker compose -f "${COMPOSE_FILE}" pull
+docker compose -f "${COMPOSE_FILE}" up -d
 
 # ── Esperar a que el backend escriba .admin_pass ──────────────────────────────
+# IMPORTANTE: </dev/null en cada docker exec para evitar que consuma stdin
+# cuando el script se ejecuta via "curl | bash".
 info "Esperando que el backend arranque..."
-MAX=40; I=0
+MAX=40
+I=0
 while true; do
-  if docker compose -f "${INSTALL_DIR}/docker-compose.yml" \
-      exec -T iagentshub sh -c 'test -f /data/.admin_pass' &>/dev/null; then
+  if docker compose -f "${COMPOSE_FILE}" exec -T iagentshub \
+      sh -c 'test -f /data/.admin_pass' </dev/null &>/dev/null; then
     break
   fi
   I=$((I+1))
   if [ "$I" -ge "$MAX" ]; then
-    warn "Timeout esperando .admin_pass"
+    warn "Timeout esperando .admin_pass (el backend puede tardar más en arrancar)"
     break
   fi
   sleep 3
 done
 
 # ── Leer credenciales del admin ───────────────────────────────────────────────
-ADMIN_PASS=$(docker compose -f "${INSTALL_DIR}/docker-compose.yml" \
-  exec -T iagentshub sh -c 'cat /data/.admin_pass' 2>/dev/null \
-  | tr -d '\r\n' || true)
+ADMIN_PASS=$(docker compose -f "${COMPOSE_FILE}" exec -T iagentshub \
+  sh -c 'cat /data/.admin_pass' </dev/null 2>/dev/null | tr -d '\r\n' || true)
+
 # shellcheck disable=SC1091
 source "${INSTALL_DIR}/.env" 2>/dev/null || true
 
@@ -193,12 +192,12 @@ echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@lo
 if [ -n "${ADMIN_PASS:-}" ]; then
   echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
 else
-  echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ejecuta: docker compose exec iagentshub sh -c 'cat /data/.admin_pass'${RESET}"
+  echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ver: docker logs iagentshub-iagentshub-1 | grep -i pass${RESET}"
 fi
 echo -e "${BOLD}║${RESET}  Directorio  › ${INSTALL_DIR}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo
 echo -e "  Logs:        ${CYAN}cd ${INSTALL_DIR} && docker compose logs -f${RESET}"
-echo -e "  Parar:       ${CYAN}docker compose down${RESET}"
+echo -e "  Parar:       ${CYAN}cd ${INSTALL_DIR} && docker compose down${RESET}"
 echo -e "  Actualizar:  ${CYAN}curl -fsSL ${GITHUB_RAW}/install.sh | bash${RESET}"
 echo
