@@ -354,19 +354,23 @@ if "!LOCAL!"=="1" (
   copy "%SCRIPT_DIR%supervisord.conf"      "!TMPDIR!\supervisord.conf"   >nul
   copy "%SCRIPT_DIR%entrypoint-unified.sh" "!TMPDIR!\entrypoint-unified.sh" >nul
 
-  echo [gaia] Construyendo imagen unificada -^> !UNIFIED_IMG!
-  docker build -t "!UNIFIED_IMG!" "!TMPDIR!"
+  :: Usar buildx para imagen multi-plataforma (amd64 + arm64)
+  docker buildx inspect multiarch >nul 2>&1
+  if !errorlevel! neq 0 (
+    echo [gaia] Creando builder multi-plataforma...
+    docker buildx create --name multiarch --driver docker-container --use
+    docker buildx inspect --bootstrap
+  ) else (
+    docker buildx use multiarch
+  )
+
+  echo [gaia] Construyendo imagen multi-plataforma (linux/amd64, linux/arm64) -^> !UNIFIED_IMG!
+  echo [gaia] Esto tarda unos minutos la primera vez...
+  docker buildx build --platform linux/amd64,linux/arm64 --push -t "!UNIFIED_IMG!" "!TMPDIR!"
   set "_BUILD_ERR=!errorlevel!"
   rd /s /q "!TMPDIR!" >nul 2>&1
   if !_BUILD_ERR! neq 0 (
-    echo [gaia] ERROR: Fallo al construir la imagen. Comprueba el Dockerfile.
-    exit /b 1
-  )
-
-  echo [gaia] Subiendo imagen a Docker Hub...
-  docker push "!UNIFIED_IMG!"
-  if !errorlevel! neq 0 (
-    echo [gaia] ERROR: Fallo al subir la imagen. Comprueba que has iniciado sesion con: docker login
+    echo [gaia] ERROR: Fallo al construir la imagen multi-plataforma.
     exit /b 1
   )
 

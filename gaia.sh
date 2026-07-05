@@ -422,11 +422,23 @@ cmd_push() {
   cp "$SCRIPT_DIR/supervisord.conf"      "$_PUSH_TMPDIR/supervisord.conf"
   cp "$SCRIPT_DIR/entrypoint-unified.sh" "$_PUSH_TMPDIR/entrypoint-unified.sh"
 
-  info "Construyendo imagen unificada → ${unified_img}"
-  docker build -t "$unified_img" "$_PUSH_TMPDIR"
+  # Usar buildx para imagen multi-plataforma (amd64 + arm64)
+  # Crea el builder si no existe
+  if ! docker buildx inspect multiarch &>/dev/null; then
+    info "Creando builder multi-plataforma..."
+    docker buildx create --name multiarch --driver docker-container --use
+    docker buildx inspect --bootstrap
+  else
+    docker buildx use multiarch
+  fi
 
-  info "Subiendo a Docker Hub..."
-  docker push "$unified_img"
+  info "Construyendo imagen multi-plataforma (linux/amd64, linux/arm64) → ${unified_img}"
+  info "Esto tarda unos minutos la primera vez..."
+  docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --push \
+    -t "$unified_img" \
+    "$_PUSH_TMPDIR"
 
   echo
   success "Imagen publicada en Docker Hub:"
