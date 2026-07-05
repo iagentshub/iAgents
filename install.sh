@@ -157,9 +157,16 @@ docker compose up -d
 # ── Esperar a que el backend escriba .admin_pass ──────────────────────────────
 info "Esperando que el backend arranque..."
 MAX=40; I=0
-until docker compose -f "${INSTALL_DIR}/docker-compose.yml" \
-    exec -T iagentshub sh -c 'test -f /data/.admin_pass' &>/dev/null; do
-  I=$((I+1)); [ $I -ge $MAX ] && { warn "Timeout esperando .admin_pass"; break; }
+while true; do
+  if docker compose -f "${INSTALL_DIR}/docker-compose.yml" \
+      exec -T iagentshub sh -c 'test -f /data/.admin_pass' &>/dev/null; then
+    break
+  fi
+  I=$((I+1))
+  if [ "$I" -ge "$MAX" ]; then
+    warn "Timeout esperando .admin_pass"
+    break
+  fi
   sleep 3
 done
 
