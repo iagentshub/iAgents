@@ -79,13 +79,47 @@ check_docker() {
 
 ensure_env() {
   cd "$SCRIPT_DIR"
+
+  # Generador de hex aleatorio compatible con macOS y Linux
+  _rand_hex() {
+    LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64 \
+      || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
+      || date +%s%N | sha256sum | cut -c1-64
+  }
+
   if [ ! -f .env ]; then
+    # Primera vez: crear .env desde .env.example con secrets aleatorios
+    [ -f .env.example ] || error "No se encontró .env.example en ${SCRIPT_DIR}"
     cp .env.example .env
-    warn "Se ha creado .env a partir de .env.example."
-    warn "Edita el fichero .env y cambia las contraseñas antes de continuar."
+
+    local agents_secret db_pass
+    agents_secret=$(_rand_hex)
+    db_pass=$(_rand_hex)
+
+    # sed -i requiere extensión en macOS; el .bak se borra justo después
+    sed -i.bak \
+      -e "s|^GAIA_AGENTS_SECRET=.*|GAIA_AGENTS_SECRET=${agents_secret}|" \
+      -e "s|^GAIA_DB_PASSWORD=.*|GAIA_DB_PASSWORD=${db_pass}|" \
+      .env && rm -f .env.bak
+
+    warn "Se ha creado .env con secrets aleatorios."
+    warn "Revisa GAIA_FRONTEND_URL y GAIA_ADMIN_EMAIL si vas a desplegar en producción."
     echo
-    read -rp "¿Has editado .env y quieres continuar? [s/N] " resp
-    [[ "$resp" =~ ^[sS]$ ]] || { info "Operación cancelada."; exit 0; }
+    return
+  fi
+
+  # .env ya existe: asegurar que GAIA_DB_PASSWORD tiene un valor no vacío/débil
+  local cur_pass
+  cur_pass=$(grep -E '^GAIA_DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || true)
+  if [ -z "$cur_pass" ] || [ "$cur_pass" = "changeme" ]; then
+    local db_pass
+    db_pass=$(_rand_hex)
+    if grep -q '^GAIA_DB_PASSWORD=' .env; then
+      sed -i.bak "s|^GAIA_DB_PASSWORD=.*|GAIA_DB_PASSWORD=${db_pass}|" .env && rm -f .env.bak
+    else
+      echo "GAIA_DB_PASSWORD=${db_pass}" >> .env
+    fi
+    info "GAIA_DB_PASSWORD actualizado con valor aleatorio en .env"
   fi
 }
 

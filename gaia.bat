@@ -409,16 +409,32 @@ if "!LOCAL!"=="1" (
 
 :ensure_env
   cd /d "%SCRIPT_DIR%"
+
+  :: Generar valores aleatorios via PowerShell (disponible en Windows 10/11)
+  for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command "$b=New-Object byte[] 32;[System.Security.Cryptography.RandomNumberGenerator]::Fill($b);[BitConverter]::ToString($b).Replace('-','').ToLower()"`) do set "_RAND_AGENTS=%%R"
+  for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command "$b=New-Object byte[] 32;[System.Security.Cryptography.RandomNumberGenerator]::Fill($b);[BitConverter]::ToString($b).Replace('-','').ToLower()"`) do set "_RAND_DB=%%R"
+
   if not exist ".env" (
     copy ".env.example" ".env" >nul
-    echo [gaia] AVISO: Se ha creado .env a partir de .env.example.
-    echo [gaia] AVISO: Edita el fichero .env y cambia las contrasenas antes de continuar.
+    powershell -NoProfile -Command "(Get-Content '.env') -replace '^GAIA_AGENTS_SECRET=.*', 'GAIA_AGENTS_SECRET=!_RAND_AGENTS!' | Set-Content '.env'"
+    powershell -NoProfile -Command "(Get-Content '.env') -replace '^GAIA_DB_PASSWORD=.*', 'GAIA_DB_PASSWORD=!_RAND_DB!' | Set-Content '.env'"
+    echo [gaia] AVISO: Se ha creado .env con secrets aleatorios.
+    echo [gaia] AVISO: Revisa GAIA_FRONTEND_URL y GAIA_ADMIN_EMAIL si vas a desplegar en produccion.
     echo.
-    set /p "RESP=[gaia] Has editado .env y quieres continuar? [s/N] "
-    if /i not "!RESP!"=="s" (
-      echo [gaia] Operacion cancelada.
-      exit /b 0
-    )
+    exit /b 0
+  )
+
+  :: .env ya existe: actualizar GAIA_DB_PASSWORD si esta vacio o es debil
+  set "_CUR_PASS="
+  for /f "usebackq tokens=1,* delims==" %%K in (".env") do (
+    if "%%K"=="GAIA_DB_PASSWORD" set "_CUR_PASS=%%L"
+  )
+  set "_NEED_PW_UPDATE=0"
+  if "!_CUR_PASS!"=="" set "_NEED_PW_UPDATE=1"
+  if /i "!_CUR_PASS!"=="changeme" set "_NEED_PW_UPDATE=1"
+  if "!_NEED_PW_UPDATE!"=="1" (
+    powershell -NoProfile -Command "(Get-Content '.env') -replace '^GAIA_DB_PASSWORD=.*', 'GAIA_DB_PASSWORD=!_RAND_DB!' | Set-Content '.env'"
+    echo [gaia] GAIA_DB_PASSWORD actualizado con valor aleatorio en .env
   )
   exit /b 0
 

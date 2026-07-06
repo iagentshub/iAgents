@@ -106,7 +106,7 @@ services:
     environment:
       POSTGRES_DB: iagentshub
       POSTGRES_USER: gaia
-      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:?ERROR: define GAIA_DB_PASSWORD en tu archivo .env (nunca uses el valor por defecto)}"
+      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:-iagentshub_generate_db_password_with_gaia_sh}"
     volumes:
       - iagentshub_postgres:/var/lib/postgresql/data
     healthcheck:
