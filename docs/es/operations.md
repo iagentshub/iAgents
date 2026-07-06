@@ -11,7 +11,37 @@ Todo se gestiona con un único script desde la raíz del proyecto.
 
 ---
 
-## Primer arranque
+## Instalación de un solo comando
+
+Elige el método que mejor se adapte a tu entorno:
+
+### 🐳 Linux / macOS con Docker (recomendado para producción)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh | bash
+```
+
+### 🍎 macOS sin Docker
+
+Instala Python y git automáticamente via Homebrew si no están presentes. Usa SQLite como base de datos.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-mac.sh | bash
+```
+
+### 🪟 Windows sin Docker
+
+Instala Python y git automáticamente via winget si no están presentes. Usa SQLite como base de datos. Ejecuta en PowerShell como Administrador:
+
+```powershell
+irm https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-windows.ps1 | iex
+```
+
+> **Nota:** Los modos sin Docker utilizan SQLite como base de datos. Para entornos de producción o con múltiples usuarios concurrentes se recomienda el modo Docker con PostgreSQL.
+
+---
+
+## Primer arranque (con repositorio clonado)
 
 Clona el repositorio, copia el fichero de configuración de ejemplo, completa los valores necesarios y ejecuta el script de arranque. La plataforma estará disponible en `http://localhost` al finalizar.
 

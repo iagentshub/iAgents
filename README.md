@@ -14,41 +14,78 @@
 
 ---
 
-## Instalación rápida / Quick install
+## Instalación / Install
 
-Solo necesitas Docker:
+Elige el método que mejor se adapte a tu entorno:
+
+| | Plataforma | Requisitos | Comando |
+|---|---|---|---|
+| 🐳 | **Linux / macOS** (recomendado) | Docker | `curl -fsSL .../install.sh \| bash` |
+| 🍎 | **macOS** sin Docker | macOS 12+ | `curl -fsSL .../install-local-mac.sh \| bash` |
+| 🪟 | **Windows** sin Docker | Windows 10/11 + winget | `irm .../install-local-windows.ps1 \| iex` |
+
+---
+
+### 🐳 Linux / macOS con Docker (recomendado para producción)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh | bash
 ```
 
-El script descarga la configuración, te pide el dominio y el email de administrador, y arranca la aplicación. Para actualizar, ejecuta el mismo comando.
+Descarga la configuración, te pide el dominio y el email del administrador, y arranca la aplicación. Para actualizar, ejecuta el mismo comando.
 
 > **Docker Hub:** [`iagenthub/iagentshub`](https://hub.docker.com/r/iagenthub/iagentshub)
 
 ---
 
-## Otros modos de despliegue / Other deploy modes
+### 🍎 macOS sin Docker
 
-**Linux / macOS — con repositorio clonado**
+Instala Python y git automáticamente via Homebrew si no están presentes. Usa SQLite como base de datos.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-mac.sh | bash
+```
+
+Una vez instalado:
+
+```bash
+cd ~/iagentshub/iagentshub
+./gaia.sh start --local   # arrancar
+./gaia.sh stop --local    # parar
+./gaia.sh logs --local    # ver logs
+```
+
+---
+
+### 🪟 Windows sin Docker
+
+Instala Python y git automáticamente via winget si no están presentes. Usa SQLite como base de datos. Ejecuta en **PowerShell como Administrador**:
+
+```powershell
+irm https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-windows.ps1 | iex
+```
+
+Una vez instalado:
+
+```bat
+cd %USERPROFILE%\iagentshub\iagentshub
+gaia.bat start --local   rem arrancar
+gaia.bat stop --local    rem parar
+gaia.bat logs --local    rem ver logs
+```
+
+---
+
+### ⚙️ Modos avanzados — con repositorio clonado
 
 ```bash
 git clone https://github.com/iagentshub/iagentshub.git
-cd iagentshub
-cp .env.example .env   # edita GAIA_AGENTS_SECRET y GAIA_FRONTEND_URL
-./gaia.sh start        # Docker, imágenes de GitHub
-./gaia.sh start --hub  # Docker, imágenes de Docker Hub
-./gaia.sh start --dev  # Docker, código local con hot reload
-./gaia.sh start --local  # sin Docker (uvicorn + proxy Python)
-```
-
-**Windows**
-
-```bat
-git clone https://github.com/iagentshub/iagentshub.git
-cd iagentshub
-copy .env.example .env
-gaia.bat start
+cd iagentshub/iagentshub
+cp .env.example .env          # edita GAIA_AGENTS_SECRET y GAIA_FRONTEND_URL
+./gaia.sh start               # Docker, imágenes locales
+./gaia.sh start --hub         # Docker, imágenes de Docker Hub
+./gaia.sh start --dev         # Docker, hot reload con código local
+./gaia.sh start --local       # sin Docker (uvicorn + proxy Python)
 ```
 
 ---

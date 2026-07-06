@@ -106,7 +106,7 @@ services:
     environment:
       POSTGRES_DB: iagentshub
       POSTGRES_USER: gaia
-      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:-changeme}"
+      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:?ERROR: define GAIA_DB_PASSWORD en tu archivo .env (nunca uses el valor por defecto)}"
     volumes:
       - iagentshub_postgres:/var/lib/postgresql/data
     healthcheck:
@@ -183,7 +183,8 @@ services:
       GAIA_MAX_GUEST_SESSIONS: "200"
       # postgresql://gaia:password@postgres:5432/iagentshub — leave empty for SQLite
       DATABASE_URL: ""
-      GAIA_DB_PASSWORD: ""
+      # Debe coincidir con el POSTGRES_PASSWORD del servicio postgres. Define en .env
+      GAIA_DB_PASSWORD: "${GAIA_DB_PASSWORD:-}"
     volumes:
       - iagentshub_backend:/app
       - iagentshub_data:/data
