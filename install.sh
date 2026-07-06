@@ -77,10 +77,14 @@ if $FIRST_INSTALL; then
   ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost}"
   PORT="${INPUT_PORT:-8007}"
 
-  # Generar secreto JWT aleatorio
-  AGENTS_SECRET=$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64 \
-    || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
-    || date +%s%N | sha256sum | head -c 64)
+  # Generar secretos aleatorios
+  _rand_hex() {
+    LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64 \
+      || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
+      || date +%s%N | sha256sum | head -c 64
+  }
+  AGENTS_SECRET=$(_rand_hex)
+  DB_PASSWORD=$(_rand_hex)
 
   cat > .env <<EOF
 # iAgents Hub — configuración generada el $(date '+%Y-%m-%d')
@@ -117,9 +121,9 @@ GAIA_MAX_GUEST_SESSIONS=0
 
 # ── Base de datos ─────────────────────────────────────────────────────────────
 # Vacío = SQLite en /data/hub.db (recomendado para empezar)
-# PostgreSQL: postgresql://gaia:changeme@postgres:5432/iagentshub
+# PostgreSQL: postgresql://gaia:<GAIA_DB_PASSWORD>@postgres:5432/iagentshub
 DATABASE_URL=
-GAIA_DB_PASSWORD=changeme
+GAIA_DB_PASSWORD=${DB_PASSWORD}
 
 # ── Stripe (opcional) ─────────────────────────────────────────────────────────
 STRIPE_SECRET_KEY=

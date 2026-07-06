@@ -51,9 +51,10 @@ services:
       start_period: 40s
 
   # ── PostgreSQL (opcional) ─────────────────────────────────────────────────
-  # Descomenta este bloque y añade en .env:
-  #   DATABASE_URL=postgresql://gaia:changeme@postgres:5432/iagentshub
-  #   GAIA_DB_PASSWORD=changeme
+  # Descomenta este bloque para usar PostgreSQL en lugar de SQLite.
+  # GAIA_DB_PASSWORD ya está en tu .env (generado aleatoriamente al instalar).
+  # Actualiza DATABASE_URL con ese valor:
+  #   DATABASE_URL=postgresql://gaia:<GAIA_DB_PASSWORD>@postgres:5432/iagentshub
   #
   # postgres:
   #   image: postgres:16-alpine
@@ -61,7 +62,7 @@ services:
   #   environment:
   #     POSTGRES_DB: iagentshub
   #     POSTGRES_USER: gaia
-  #     POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:-changeme}"
+  #     POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}"
   #   volumes:
   #     - iagentshub_postgres:/var/lib/postgresql/data
   #   healthcheck:
