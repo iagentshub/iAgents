@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# install-local-mac.sh — Instala iAgents Hub en macOS SIN Docker
+# install-local-linux.sh — Instala iAgents Hub en Linux SIN Docker
 #
 # Uso:
-#   curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-mac.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-linux.sh | bash
 #
-# Requisitos: macOS 12+. El script instala Homebrew, Python y git si no están presentes.
+# Requisitos: una distribución con apt-get, dnf, yum, pacman o zypper.
+# El script instala Python 3.11+ y git mediante el gestor de paquetes nativo
+# de la distribución si no están presentes (no usa Homebrew).
 # Base de datos: SQLite (incluida en Python, sin configuración adicional).
 # Para PostgreSQL o producción real usa el instalador Docker: install.sh
 
@@ -31,9 +33,15 @@ GITHUB_RAW="https://raw.githubusercontent.com/iagentshub/iagentshub/main"
 INSTALL_DIR="${IAGENTSHUB_DIR:-$HOME/iagentshub}"
 MIN_PYTHON="3.11"
 
+# sudo solo si hace falta (algunos contenedores/CI ya corren como root)
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  command -v sudo &>/dev/null && SUDO="sudo"
+fi
+
 echo
 echo -e "${BOLD}╔══════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║    iAgents Hub · Instalación macOS      ║${RESET}"
+echo -e "${BOLD}║    iAgents Hub · Instalación Linux      ║${RESET}"
 echo -e "${BOLD}║    Sin Docker · SQLite                   ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo
@@ -42,55 +50,95 @@ echo
 FIRST_INSTALL=true
 [ -f "${INSTALL_DIR}/iagentshub/.env" ] && FIRST_INSTALL=false
 
-# ── 1. Homebrew ───────────────────────────────────────────────────────────────
-step "Comprobando Homebrew"
-if ! command -v brew &>/dev/null; then
-  info "Instalando Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  # Añadir brew al PATH para el resto del script
-  if [[ -f /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -f /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
+# ── Gestor de paquetes (detección perezosa: solo si hace falta instalar algo) ──
+PKG_MANAGER=""
+PKG_INSTALL=""
+_detect_pkg_manager() {
+  [ -n "$PKG_MANAGER" ] && return 0
+  if command -v apt-get &>/dev/null; then
+    PKG_MANAGER="apt-get"; PKG_INSTALL="$SUDO apt-get install -y"
+    $SUDO apt-get update -y -qq || true
+  elif command -v dnf &>/dev/null; then
+    PKG_MANAGER="dnf"; PKG_INSTALL="$SUDO dnf install -y"
+  elif command -v yum &>/dev/null; then
+    PKG_MANAGER="yum"; PKG_INSTALL="$SUDO yum install -y"
+  elif command -v pacman &>/dev/null; then
+    PKG_MANAGER="pacman"; PKG_INSTALL="$SUDO pacman -S --noconfirm"
+  elif command -v zypper &>/dev/null; then
+    PKG_MANAGER="zypper"; PKG_INSTALL="$SUDO zypper install -y"
+  else
+    error "No se encontró un gestor de paquetes soportado (apt-get, dnf, yum, pacman, zypper). Instala Python ${MIN_PYTHON}+ y git manualmente y vuelve a ejecutar este script."
   fi
-  success "Homebrew instalado."
-else
-  success "Homebrew ya instalado: $(brew --version | head -1)"
-fi
+  info "Gestor de paquetes detectado: ${PKG_MANAGER}"
+}
 
-# ── 2. Python ≥ 3.11 ──────────────────────────────────────────────────────────
-step "Comprobando Python ${MIN_PYTHON}+"
-PYTHON=""
-# Buscar primero en brew, luego sistema
-for candidate in python3.13 python3.12 python3.11 python3; do
-  if command -v "$candidate" &>/dev/null; then
-    if "$candidate" -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)" 2>/dev/null; then
-      PYTHON="$candidate"
-      break
+_find_python() {
+  local candidate
+  for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" &>/dev/null; then
+      if "$candidate" -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)" 2>/dev/null; then
+        echo "$candidate"
+        return 0
+      fi
     fi
-  fi
-done
+  done
+  return 1
+}
+
+# ── 1. Python ≥ 3.11 ──────────────────────────────────────────────────────────
+step "Comprobando Python ${MIN_PYTHON}+"
+PYTHON="$(_find_python || true)"
 
 if [ -z "$PYTHON" ]; then
-  info "Instalando Python 3.11 via Homebrew..."
-  brew install python@3.11
-  PYTHON="$(brew --prefix)/bin/python3.11"
+  info "Python ${MIN_PYTHON}+ no encontrado. Instalando via el gestor de paquetes..."
+  _detect_pkg_manager
+  case "$PKG_MANAGER" in
+    apt-get)
+      $PKG_INSTALL python3.11 python3.11-venv 2>/dev/null \
+        || $PKG_INSTALL python3 python3-venv python3-pip
+      ;;
+    dnf|yum)
+      $PKG_INSTALL python3.11 python3.11-pip 2>/dev/null \
+        || $PKG_INSTALL python3 python3-pip
+      ;;
+    pacman)
+      $PKG_INSTALL python python-pip
+      ;;
+    zypper)
+      $PKG_INSTALL python311 python311-pip 2>/dev/null \
+        || $PKG_INSTALL python3 python3-pip
+      ;;
+  esac
+
+  PYTHON="$(_find_python || true)"
+  [ -n "$PYTHON" ] || error "No se pudo instalar Python ${MIN_PYTHON}+ automáticamente. Instálalo manualmente (p.ej. desde https://python.org o los repositorios de tu distro) y vuelve a ejecutar este script."
   success "Python instalado: $($PYTHON --version)"
 else
   success "Python encontrado: $($PYTHON --version)"
 fi
 
-# ── 3. Git ────────────────────────────────────────────────────────────────────
+# Algunas distros (Debian/Ubuntu) separan el módulo venv del paquete base.
+if ! "$PYTHON" -c "import venv" 2>/dev/null; then
+  info "Instalando soporte de entornos virtuales (venv)..."
+  _detect_pkg_manager
+  case "$PKG_MANAGER" in
+    apt-get) $PKG_INSTALL python3-venv ;;
+    *) : ;; # incluido junto con el paquete python3 en el resto de gestores
+  esac
+fi
+
+# ── 2. Git ────────────────────────────────────────────────────────────────────
 step "Comprobando git"
 if ! command -v git &>/dev/null; then
-  info "Instalando git via Homebrew..."
-  brew install git
+  info "Instalando git..."
+  _detect_pkg_manager
+  $PKG_INSTALL git
   success "git instalado."
 else
   success "git ya instalado: $(git --version)"
 fi
 
-# ── 4. Clonar o actualizar repositorios ───────────────────────────────────────
+# ── 3. Clonar o actualizar repositorios ───────────────────────────────────────
 # iagentshub/backend/frontend son repos separados que deben quedar como
 # hermanos dentro de INSTALL_DIR — gaia.sh (dentro de iagentshub/) resuelve
 # ../backend y ../frontend de forma relativa, y espera este layout exacto.
@@ -115,9 +163,9 @@ success "Repositorios listos."
 
 # El entorno virtual y las dependencias de Python los gestiona gaia.sh por su
 # cuenta (ensure_venv, en ${INSTALL_DIR}/iagentshub/.venv) al arrancar en el
-# paso 7 — no lo dupliques aquí.
+# paso 5 — no lo dupliques aquí.
 
-# ── 6. Configurar .env ────────────────────────────────────────────────────────
+# ── 4. Configurar .env ────────────────────────────────────────────────────────
 ENV_FILE="${INSTALL_DIR}/iagentshub/.env"
 if $FIRST_INSTALL; then
   step "Configuración inicial"
@@ -172,7 +220,7 @@ else
   warn ".env existente conservado (${ENV_FILE})."
 fi
 
-# ── 7. Arrancar ───────────────────────────────────────────────────────────────
+# ── 5. Arrancar ───────────────────────────────────────────────────────────────
 step "Arrancando iAgents Hub"
 cd "${INSTALL_DIR}/iagentshub"
 bash gaia.sh start --local
@@ -212,6 +260,6 @@ echo -e "${BOLD}╚════════════════════�
 echo
 echo -e "  Parar:       ${CYAN}cd ${INSTALL_DIR}/iagentshub && ./gaia.sh stop --local${RESET}"
 echo -e "  Logs:        ${CYAN}cd ${INSTALL_DIR}/iagentshub && ./gaia.sh logs --local${RESET}"
-echo -e "  Actualizar:  ${CYAN}curl -fsSL ${GITHUB_RAW}/install-local-mac.sh | bash${RESET}"
+echo -e "  Actualizar:  ${CYAN}curl -fsSL ${GITHUB_RAW}/install-local-linux.sh | bash${RESET}"
 echo -e "  Arrancar:    ${CYAN}cd ${INSTALL_DIR}/iagentshub && ./gaia.sh start --local${RESET}"
 echo

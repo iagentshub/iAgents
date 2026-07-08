@@ -18,7 +18,9 @@ function Write-Warn    { param($m) Write-Host "[iagentshub] $m" -ForegroundColor
 function Write-Fail    { param($m) Write-Error "[iagentshub] $m" }
 function Write-Step    { param($m) Write-Host "`n── $m ──────────────────────────────────────" -ForegroundColor White }
 
-$RepoUrl    = "https://github.com/iagentshub/iagentshub.git"
+$RepoUrl         = "https://github.com/iagentshub/iagentshub.git"
+$BackendRepoUrl  = "https://github.com/iagentshub/backend.git"
+$FrontendRepoUrl = "https://github.com/iagentshub/frontend.git"
 $GithubRaw  = "https://raw.githubusercontent.com/iagentshub/iagentshub/main"
 $InstallDir = if ($env:IAGENTSHUB_DIR) { $env:IAGENTSHUB_DIR } else { "$env:USERPROFILE\iagentshub" }
 $EnvFile    = "$InstallDir\iagentshub\.env"
@@ -82,43 +84,34 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Success "git ya instalado: $(git --version)"
 }
 
-# ── 4. Clonar o actualizar repositorio ────────────────────────────────────────
-Write-Step "Repositorio"
+# ── 4. Clonar o actualizar repositorios ────────────────────────────────────────
+# iagentshub/backend/frontend son repos separados que deben quedar como
+# hermanos dentro de InstallDir — gaia.bat (dentro de iagentshub\) resuelve
+# ..\backend y ..\frontend de forma relativa, y espera este layout exacto.
+Write-Step "Repositorios"
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-if (Test-Path "$InstallDir\.git") {
-    Write-Info "Actualizando repositorio en $InstallDir..."
-    git -C $InstallDir pull --ff-only
-    Write-Success "Repositorio actualizado."
-} else {
-    Write-Info "Clonando repositorio en $InstallDir..."
-    git clone $RepoUrl $InstallDir
-    Write-Success "Repositorio clonado."
+function Sync-Repo {
+    param($Url, $Dir, $Name)
+    if (Test-Path "$Dir\.git") {
+        Write-Info "Actualizando $Name..."
+        git -C $Dir pull --ff-only
+    } else {
+        Write-Info "Clonando $Name..."
+        git clone $Url $Dir
+    }
 }
 
-# ── 5. Entorno virtual y dependencias ─────────────────────────────────────────
-Write-Step "Dependencias Python"
-$VenvDir = "$InstallDir\.venv"
-$ReqFile = "$InstallDir\backend\requirements.txt"
+Sync-Repo $RepoUrl         "$InstallDir\iagentshub" "iagentshub"
+Sync-Repo $BackendRepoUrl  "$InstallDir\backend"    "backend"
+Sync-Repo $FrontendRepoUrl "$InstallDir\frontend"   "frontend"
+Write-Success "Repositorios listos."
 
-if (-not (Test-Path $ReqFile)) {
-    Write-Fail "No se encontro backend\requirements.txt"
-}
-
-if (-not (Test-Path $VenvDir)) {
-    Write-Info "Creando entorno virtual en .venv\..."
-    & $PythonExe -m venv $VenvDir
-}
-
-$Pip    = "$VenvDir\Scripts\pip.exe"
-$Python = "$VenvDir\Scripts\python.exe"
-
-Write-Info "Instalando dependencias (puede tardar 1-2 minutos)..."
-& $Pip install -q --upgrade pip
-& $Pip install -q -r $ReqFile
-Write-Success "Dependencias instaladas."
+# El entorno virtual y las dependencias de Python los gestiona gaia.bat por su
+# cuenta (ensure_venv, en $InstallDir\iagentshub\.venv) al arrancar en el
+# paso 7 — no lo dupliques aqui.
 
 # ── 6. Configurar .env ────────────────────────────────────────────────────────
 if ($FirstInstall) {
@@ -131,7 +124,7 @@ if ($FirstInstall) {
     $Port = Read-Host "  Puerto [8007]"
     if (-not $Port) { $Port = "8007" }
 
-    $Secret = & $Python -c "import secrets; print(secrets.token_hex(32))"
+    $Secret = & $PythonExe -c "import secrets; print(secrets.token_hex(32))"
     $DataDir = "$InstallDir\iagentshub\data"
 
     $EnvDir = Split-Path $EnvFile

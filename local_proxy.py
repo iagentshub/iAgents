@@ -30,8 +30,10 @@ PORT = int(os.environ.get("PORT", "8007"))
 BACKEND = f"http://127.0.0.1:{os.environ.get('GAIA_PORT', '8765')}"
 
 # Rutas que redireccionan (sin barra → con barra, o alias)
+# Nota: "/" NO está aquí a propósito — se resuelve como fichero normal
+# (pages/index.html decide en el cliente entre landing y /login/, según
+# landing_enabled). Mismo comportamiento que nginx.conf en producción.
 _REDIRECT_302 = {
-    "/": "/login/",
     "/register": "/register/",
     "/verify": "/verify/",
     "/forgot-password": "/forgot-password/",

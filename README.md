@@ -21,6 +21,7 @@ Elige el método que mejor se adapte a tu entorno:
 | | Plataforma | Requisitos | Comando |
 |---|---|---|---|
 | 🐳 | **Linux / macOS** (recomendado) | Docker | `curl -fsSL .../install.sh \| bash` |
+| 🐧 | **Linux** sin Docker | apt/dnf/yum/pacman/zypper | `curl -fsSL .../install-local-linux.sh \| bash` |
 | 🍎 | **macOS** sin Docker | macOS 12+ | `curl -fsSL .../install-local-mac.sh \| bash` |
 | 🪟 | **Windows** sin Docker | Windows 10/11 + winget | `irm .../install-local-windows.ps1 \| iex` |
 
@@ -35,6 +36,25 @@ curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.
 Descarga la configuración, te pide el dominio y el email del administrador, y arranca la aplicación. Para actualizar, ejecuta el mismo comando.
 
 > **Docker Hub:** [`iagenthub/iagentshub`](https://hub.docker.com/r/iagenthub/iagentshub)
+
+---
+
+### 🐧 Linux sin Docker
+
+Instala Python 3.11+ y git mediante el gestor de paquetes de tu distribución (apt, dnf, yum, pacman o zypper) si no están presentes. Usa SQLite como base de datos.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-linux.sh | bash
+```
+
+Una vez instalado:
+
+```bash
+cd ~/iagentshub/iagentshub
+./gaia.sh start --local   # arrancar
+./gaia.sh stop --local    # parar
+./gaia.sh logs --local    # ver logs
+```
 
 ---
 
