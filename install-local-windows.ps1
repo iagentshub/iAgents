@@ -187,10 +187,16 @@ for ($i = 0; $i -lt 15; $i++) {
     Start-Sleep -Seconds 2
 }
 
-# Leer puerto del .env
+# Leer puerto y email del .env
 $PortFinal = "8007"
-Get-Content $EnvFile | Where-Object { $_ -match "^PORT=" } | ForEach-Object {
-    $PortFinal = $_.Split("=")[1].Trim()
+$AdminEmailFinal = "admin@localhost"
+Get-Content $EnvFile | ForEach-Object {
+    if ($_ -match "^PORT=") {
+        $PortFinal = $_.Split("=")[1].Trim()
+    }
+    if ($_ -match "^GAIA_ADMIN_EMAIL=") {
+        $AdminEmailFinal = $_.Split("=")[1].Trim()
+    }
 }
 
 Write-Host ""
@@ -202,7 +208,7 @@ if ($FirstInstall) {
 }
 Write-Host "╠══════════════════════════════════════════╣" -ForegroundColor Green
 Write-Host "  URL         > http://localhost:$PortFinal" -ForegroundColor Cyan
-Write-Host "  Admin       > $AdminEmail" -ForegroundColor Cyan
+Write-Host "  Admin       > $AdminEmailFinal" -ForegroundColor Cyan
 if ($AdminPass) {
     Write-Host "  Contrasena  > $AdminPass" -ForegroundColor Green
 } else {
