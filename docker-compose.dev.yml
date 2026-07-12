@@ -115,8 +115,35 @@ services:
         FROM nginx:alpine
         RUN rm -f /usr/share/nginx/html/index.html /usr/share/nginx/html/50x.html
         EXPOSE 80
+    command:
+      - sh
+      - -c
+      - "cp /usr/share/nginx/html/nginx.conf /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
     volumes:
       - type: bind
         source: ${DEV_FRONTEND_REPO:-../frontend}
         target: /usr/share/nginx/html
         read_only: true
+
+  # React migration preview. It is opt-in so the legacy frontend on :8007
+  # remains available for side-by-side visual comparison.
+  frontend-react:
+    profiles: ["react"]
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -lc "npm ci --no-audit --no-fund && npm run dev"
+    environment:
+      VITE_API_PROXY: "http://backend:8765"
+    ports:
+      - "${REACT_PORT:-5173}:5173"
+    volumes:
+      - type: bind
+        source: ${DEV_REACT_FRONTEND_REPO:-../frontend_react}
+        target: /app
+      - frontend_react_node_modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  frontend_react_node_modules:

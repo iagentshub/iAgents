@@ -411,8 +411,21 @@ if "!LOCAL!"=="1" (
   cd /d "%SCRIPT_DIR%"
 
   :: Generar valores aleatorios via PowerShell (disponible en Windows 10/11)
-  for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command "$b=New-Object byte[] 32;[System.Security.Cryptography.RandomNumberGenerator]::Fill($b);[BitConverter]::ToString($b).Replace('-','').ToLower()"`) do set "_RAND_AGENTS=%%R"
-  for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command "$b=New-Object byte[] 32;[System.Security.Cryptography.RandomNumberGenerator]::Fill($b);[BitConverter]::ToString($b).Replace('-','').ToLower()"`) do set "_RAND_DB=%%R"
+  :: RandomNumberGenerator::Fill() no existe en Windows PowerShell 5.1; Create().GetBytes() si.
+  set "_RAND_AGENTS="
+  set "_RAND_DB="
+  for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command "$b=New-Object byte[] 32;[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b);[BitConverter]::ToString($b).Replace('-','').ToLower()"`) do set "_RAND_AGENTS=%%R"
+  for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command "$b=New-Object byte[] 32;[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b);[BitConverter]::ToString($b).Replace('-','').ToLower()"`) do set "_RAND_DB=%%R"
+
+  :: Nunca escribir un secreto vacio o predecible en .env
+  if not defined _RAND_AGENTS (
+    echo [gaia] ERROR: No se pudieron generar secretos aleatorios con PowerShell.
+    exit /b 1
+  )
+  if not defined _RAND_DB (
+    echo [gaia] ERROR: No se pudieron generar secretos aleatorios con PowerShell.
+    exit /b 1
+  )
 
   if not exist ".env" (
     copy ".env.example" ".env" >nul

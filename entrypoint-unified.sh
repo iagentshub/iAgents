@@ -34,8 +34,8 @@ fi
 # ── Inyectar variables en config.js (Stripe, API_BASE) ───────────────────────
 : "${API_BASE:=}"
 : "${STRIPE_PUBLISHABLE_KEY:=}"
-TEMPLATE="/usr/share/nginx/html/assets/js/config.template.js"
-CONFIG="/usr/share/nginx/html/assets/js/config.js"
+TEMPLATE="/usr/share/nginx/html/env.template.js"
+CONFIG="/usr/share/nginx/html/env.js"
 if [ -f "$TEMPLATE" ]; then
   envsubst '${API_BASE} ${STRIPE_PUBLISHABLE_KEY}' < "$TEMPLATE" > "$CONFIG"
 fi
