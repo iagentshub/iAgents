@@ -2,6 +2,7 @@
 settings.json
 users.json
 .admin_pass
+centinel_state.json
 
 # Directorios gestionados por data-init (nunca versionar)
 skills/public/
