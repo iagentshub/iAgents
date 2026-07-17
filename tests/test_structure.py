@@ -96,17 +96,17 @@ def test_data_subdirs_exist():
 
 
 def test_settings_json_exists():
-    # settings.json es runtime (en .gitignore); lo crea `gaia.sh` o `data-init`.
+    # settings.json es runtime (en .gitignore); lo crea `gaia.py` o `data-init`.
     # En un clone limpio no existe → skip, no error de estructura.
     settings = REPO_ROOT / "data" / "settings.json"
     if not settings.exists():
-        pytest.skip("data/settings.json no existe todavía (ejecuta: ./gaia.sh start)")
+        pytest.skip("data/settings.json no existe todavía (ejecuta: python3 gaia.py start)")
 
 
 def test_settings_json_has_required_keys():
     settings_path = REPO_ROOT / "data" / "settings.json"
     if not settings_path.exists():
-        pytest.skip("data/settings.json no existe todavía (ejecuta: ./gaia.sh start)")
+        pytest.skip("data/settings.json no existe todavía (ejecuta: python3 gaia.py start)")
     settings = json.loads(settings_path.read_text(encoding="utf-8"))
     for key in ("jwt_secret",):
         assert key in settings, f"settings.json no tiene la clave {key!r}"

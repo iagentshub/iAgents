@@ -11,3 +11,6 @@ MEJORAS.txt
 # Ficheros locales
 *.log
 *.pid
+
+# Cuarentena: scripts/código sin referencias activas, conservados por si acaso
+old/

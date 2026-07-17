@@ -16,5 +16,8 @@ jobs:
       - name: Validate docker-compose.yml
         run: docker compose config
 
-      - name: Shellcheck gaia.sh
-        run: shellcheck gaia.sh
+      - name: Shellcheck install.sh
+        run: shellcheck install.sh
+
+      - name: Compile gaia.py
+        run: python3 -m py_compile gaia.py

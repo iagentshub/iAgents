@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# iAgents Hub — imagen unificada, variante Vanilla (backend + frontend estático
+# en un solo contenedor). Publica el tag `:vanilla` (ver Dockerfile.unified
+# para la variante React, que publica `:latest`).
+#
+# El contexto de build lo prepara gaia.sh push --frontend=vanilla — contiene:
+#   backend/   → código Python + requirements.txt
+#   frontend/  → ficheros estáticos de frontend_vanilla (assets/, pages/, nginx.conf)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: dependencias Python ─────────────────────────────────────────────
+FROM python:3.12-slim AS py-builder
+WORKDIR /build
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: imagen final ─────────────────────────────────────────────────────
+FROM python:3.12-slim
+
+# nginx + supervisor + envsubst (gettext-base)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx \
+        supervisor \
+        gettext-base \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default
+
+# Dependencias Python instaladas en stage anterior
+COPY --from=py-builder /install /usr/local
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+COPY backend/ /app/
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+# Vanilla no tiene build: se copian los estáticos tal cual (assets/, pages/, etc).
+RUN rm -f /usr/share/nginx/html/index.html /usr/share/nginx/html/50x.html
+COPY frontend/ /usr/share/nginx/html/
+
+# nginx.conf → conf.d/default.conf. Sustituir proxy_pass → 127.0.0.1 (backend
+# en el mismo contenedor, igual que en Dockerfile.unified).
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i 's|http://backend:8765|http://127.0.0.1:8765|g' /etc/nginx/conf.d/default.conf
+
+# ── Supervisor ────────────────────────────────────────────────────────────────
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# ── Entrypoint ────────────────────────────────────────────────────────────────
+# gaia.sh push copia el entrypoint de la variante elegida (aquí,
+# entrypoint-unified-vanilla.sh) renombrado a entrypoint-unified.sh en el
+# contexto de build, para que este COPY sea idéntico al de Dockerfile.unified.
+COPY entrypoint-unified.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 80
+
+# Valores por defecto sobreescribibles con -e en docker run / compose
+ENV GAIA_DATA_DIR=/data \
+    GAIA_HOST=127.0.0.1 \
+    GAIA_PORT=8765 \
+    GAIA_RELOAD=false \
+    GAIA_WORKERS=4 \
+    GAIA_TRUSTED_PROXIES=127.0.0.1
+
+VOLUME ["/data"]
+
+ENTRYPOINT ["/entrypoint.sh"]

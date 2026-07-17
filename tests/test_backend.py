@@ -2,7 +2,7 @@
 
 El directorio del backend se resuelve en este orden:
   1. Variable de entorno BACKEND_DIR
-  2. ../backend  (repo hermano en el mismo workspace)
+  2. ../backend_fastapi  (repo hermano en el mismo workspace)
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-_DEFAULT_BACKEND = REPO_ROOT.parent / "backend"
+_DEFAULT_BACKEND = REPO_ROOT.parent / "backend_fastapi"
 
 
 def _backend_dir() -> Path:
@@ -39,7 +39,7 @@ def test_backend_tests_pass():
 
     Usa --collect-only para comprobar imports y estructura sin ejecutar la suite
     completa (966 tests tardarían ~10 min). Para ejecutar la suite completa:
-        cd ../backend && python3 rtests.py
+        cd ../backend_fastapi && python3 rtests.py
     """
     d = _backend_dir()
     result = subprocess.run(

@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-FRONTEND_DIR = REPO_ROOT.parent / "frontend"
-BACKEND_DIR = REPO_ROOT.parent / "backend"
+FRONTEND_DIR = REPO_ROOT.parent / "frontend_vanilla"
+BACKEND_DIR = REPO_ROOT.parent / "backend_fastapi"
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

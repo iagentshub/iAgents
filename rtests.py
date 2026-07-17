@@ -9,7 +9,7 @@ Uso:
     python3 rtests.py -k backend               # solo tests del backend
 
 Variables de entorno:
-    BACKEND_DIR   Ruta al repo del backend (default: ../backend)
+    BACKEND_DIR   Ruta al repo del backend (default: ../backend_fastapi)
 """
 import subprocess
 import sys

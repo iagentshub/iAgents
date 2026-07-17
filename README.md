@@ -16,82 +16,54 @@
 
 ## Instalación / Install
 
-Elige el método que mejor se adapte a tu entorno:
+Una única URL por sistema operativo. El script pregunta interactivamente qué
+**frontend** quieres (Vanilla o React) y qué **modo** (Docker o sin Docker):
 
-| | Plataforma | Requisitos | Comando |
-|---|---|---|---|
-| 🐳 | **Linux / macOS** (recomendado) | Docker | `curl -fsSL .../install.sh \| bash` |
-| 🐧 | **Linux** sin Docker | apt/dnf/yum/pacman/zypper | `curl -fsSL .../install-local-linux.sh \| bash` |
-| 🍎 | **macOS** sin Docker | macOS 12+ | `curl -fsSL .../install-local-mac.sh \| bash` |
-| 🪟 | **Windows** sin Docker | Windows 10/11 + winget | `irm .../install-local-windows.ps1 \| iex` |
-
----
-
-### 🐳 Linux / macOS con Docker (recomendado para producción)
+| | Plataforma | Comando |
+|---|---|---|
+| 🐳🐧🍎 | **Linux / macOS** | `curl -fsSL .../install.sh \| bash` |
+| 🪟 | **Windows** | `irm .../install.ps1 \| iex` |
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/iagentshub/iAgents/main/install.sh | bash
 ```
-
-Descarga la configuración, te pide el dominio y el email del administrador, y arranca la aplicación. Para actualizar, ejecuta el mismo comando.
-
-> **Docker Hub:** [`iagenthub/iagentshub`](https://hub.docker.com/r/iagenthub/iagentshub)
-
----
-
-### 🐧 Linux sin Docker
-
-Instala Python 3.11+ y git mediante el gestor de paquetes de tu distribución (apt, dnf, yum, pacman o zypper) si no están presentes. Usa SQLite como base de datos.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-linux.sh | bash
-```
-
-Una vez instalado:
-
-```bash
-cd ~/iagentshub/iagentshub
-./gaia.sh start --local   # arrancar
-./gaia.sh stop --local    # parar
-./gaia.sh logs --local    # ver logs
-```
-
----
-
-### 🍎 macOS sin Docker
-
-Instala Python y git automáticamente via Homebrew si no están presentes. Usa SQLite como base de datos.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-mac.sh | bash
-```
-
-Una vez instalado:
-
-```bash
-cd ~/iagentshub/iagentshub
-./gaia.sh start --local   # arrancar
-./gaia.sh stop --local    # parar
-./gaia.sh logs --local    # ver logs
-```
-
----
-
-### 🪟 Windows sin Docker
-
-Instala Python y git automáticamente via winget si no están presentes. Usa SQLite como base de datos. Ejecuta en **PowerShell como Administrador**:
 
 ```powershell
-irm https://raw.githubusercontent.com/iagentshub/iagentshub/main/install-local-windows.ps1 | iex
+irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
+
+El script:
+1. Pregunta el frontend: **Vanilla** (estático, sin build) o **React** (SPA, requiere Node.js).
+2. Pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite).
+3. Instala lo que falte (Docker no instala nada más; sin Docker instala Python 3.11+, git y, si eliges React, Node.js — todo vía el gestor de paquetes nativo: apt/dnf/yum/pacman/zypper, Homebrew o winget).
+4. Arranca la aplicación y muestra la URL, el email de admin y la contraseña generada.
+
+Para saltarte los prompts (reinstalación no interactiva / CI):
+
+```bash
+IAGENTSHUB_FRONTEND=vanilla IAGENTSHUB_MODE=docker bash install.sh
+```
+
+> **Docker Hub:** [`iagenthub/iagentshub:latest`](https://hub.docker.com/r/iagenthub/iagentshub) (React) · `iagenthub/iagentshub:vanilla` (Vanilla)
 
 Una vez instalado:
 
+`gaia.py` es un único script Python (sin dependencias externas) — igual en Linux, macOS y Windows:
+
+```bash
+cd ~/iagentshub/iAgents
+python3 gaia.py start --local     # start (if you chose "no Docker")
+python3 gaia.py stop --local      # stop
+python3 gaia.py restart --local   # restart
+python3 gaia.py logs --local      # tail logs
+```
+
 ```bat
-cd %USERPROFILE%\iagentshub\iagentshub
-gaia.bat start --local   rem arrancar
-gaia.bat stop --local    rem parar
-gaia.bat logs --local    rem ver logs
+cd %USERPROFILE%\iagentshub\iAgents
+python gaia.py start --local     rem start (if you chose "no Docker")
+python gaia.py stop --local      rem stop
+python gaia.py restart --local   rem restart
+python gaia.py logs --local      rem tail logs
 ```
 
 ---
@@ -99,13 +71,17 @@ gaia.bat logs --local    rem ver logs
 ### ⚙️ Modos avanzados — con repositorio clonado
 
 ```bash
-git clone https://github.com/iagentshub/iagentshub.git
-cd iagentshub/iagentshub
+git clone https://github.com/iagentshub/iAgents.git
+cd iagentshub/iAgents
 cp .env.example .env          # edita GAIA_AGENTS_SECRET y GAIA_FRONTEND_URL
-./gaia.sh start               # Docker, imágenes locales
-./gaia.sh start --hub         # Docker, imágenes de Docker Hub
-./gaia.sh start --dev         # Docker, hot reload con código local
-./gaia.sh start --local       # sin Docker (uvicorn + proxy Python)
+python3 gaia.py start               # Docker, imágenes locales
+python3 gaia.py start --hub         # Docker, imágenes de Docker Hub
+python3 gaia.py start --dev         # Docker, hot reload con código local
+python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)
+
+python3 gaia.py push                      # construir y subir TODAS las imágenes (:latest + :vanilla)
+python3 gaia.py push --frontend=vanilla   # construir y subir solo :vanilla
+python3 gaia.py push --frontend=react     # construir y subir solo :latest
 ```
 
 ---

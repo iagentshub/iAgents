@@ -15,9 +15,10 @@ El repositorio tiene dos capas de verificación automática que detectan errores
 
 Un hook local revisa los ficheros de configuración en el momento de hacer commit. Si alguna verificación falla, el commit se cancela hasta que se corrija.
 
-Verifica dos cosas:
+Verifica tres cosas:
 
-- **Script de arranque** — analiza `gaia.sh` en busca de errores comunes de shell scripting.
+- **Instalador** — analiza `install.sh` en busca de errores comunes de shell scripting.
+- **Script de gestión** — comprueba que `gaia.py` compila sin errores de sintaxis.
 - **Configuración de servicios** — valida que `docker-compose.yml` tiene una sintaxis correcta y que todos los servicios están bien definidos.
 
 Para activarlo, ejecuta una vez tras clonar el repositorio:

@@ -51,6 +51,17 @@ The variables controlling this behaviour are:
 
 ---
 
+## Frontend variant
+
+`install.sh` / `install.ps1` set these automatically based on what you choose during installation — only relevant if you edit `.env` by hand.
+
+| Variable | Options | Description |
+|---|---|---|
+| `GAIA_FRONTEND_VARIANT` | `vanilla` / `react` | Local mode only (`--local`, no Docker). Which frontend `gaia.py` serves. If `react`, it runs `npm run build` the first time (Node.js required) and serves the static `dist/` output. |
+| `IMAGE_TAG` | `latest` / `vanilla` / any tag | Docker Hub mode only (`--hub`). Which unified image tag to pull: `latest` is the React build, `vanilla` is the Vanilla build. |
+
+---
+
 ## Session secret
 
 Must be generated randomly before the first startup and not changed while sessions are active. If not set, the system uses a fallback value stored in the platform data — acceptable in development, not in production.

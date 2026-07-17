@@ -15,9 +15,10 @@ The repository has two layers of automated verification that catch configuration
 
 A local hook reviews configuration files at commit time. If any check fails, the commit is cancelled until the issue is fixed.
 
-It checks two things:
+It checks three things:
 
-- **Startup script** — analyses `gaia.sh` for common shell scripting errors.
+- **Installer** — analyses `install.sh` for common shell scripting errors.
+- **Management script** — checks that `gaia.py` compiles without syntax errors.
 - **Service configuration** — validates that `docker-compose.yml` has correct syntax and all services are properly defined.
 
 To activate it, run once after cloning the repository:

@@ -3,7 +3,7 @@
 # Imagen unificada: backend (FastAPI) + frontend (nginx) en un solo contenedor.
 #
 # Instalación/actualización:
-#   curl -fsSL https://raw.githubusercontent.com/iagentshub/iagentshub/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/iagentshub/iAgents/main/install.sh | bash
 
 services:
 

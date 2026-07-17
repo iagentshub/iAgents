@@ -2,12 +2,14 @@
 """
 Servidor de desarrollo sin Docker.
 
-Sirve los ficheros estáticos del frontend (../frontend) e implementa la misma
-lógica de rutas que nginx.conf, además de proxificar /api/ al backend uvicorn.
+Sirve los ficheros estáticos del frontend e implementa la misma lógica de rutas
+que nginx.conf (vanilla) o un fallback SPA (React), además de proxificar /api/
+al backend uvicorn. gaia.py fija FRONTEND_DIR según GAIA_FRONTEND_VARIANT.
 
 Variables de entorno:
-  PORT        Puerto en el que escucha (default: 8007)
-  GAIA_PORT   Puerto del backend (default: 8765)
+  PORT          Puerto en el que escucha (default: 8007)
+  GAIA_PORT     Puerto del backend (default: 8765)
+  FRONTEND_DIR  Directorio con los estáticos a servir (default: ../frontend_vanilla)
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from pathlib import Path
 # ── Configuración ─────────────────────────────────────────────────────────────
 
 _HERE = Path(__file__).parent.resolve()
-FRONTEND = (_HERE / ".." / "frontend").resolve()
+FRONTEND = Path(os.environ.get("FRONTEND_DIR", str(_HERE / ".." / "frontend_vanilla"))).resolve()
 PORT = int(os.environ.get("PORT", "8007"))
 BACKEND = f"http://127.0.0.1:{os.environ.get('GAIA_PORT', '8765')}"
 
@@ -128,7 +130,7 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
         if idx.is_file():
             return idx
 
-        # 4. SPA fallback: rutas con parámetro en la URL (p.ej. /u/{username}).
+        # 4. SPA fallback (vanilla): rutas con parámetro en la URL (p.ej. /u/{username}).
         #    Solo aplica cuando el último segmento no tiene extensión de fichero y
         #    no existe una página exacta en pages/ (ya comprobado en el paso 3).
         parts = clean.split("/")
@@ -136,6 +138,14 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
             spa = FRONTEND / "pages" / parts[0] / "index.html"
             if spa.is_file():
                 return spa
+
+        # 5. SPA fallback genérico (build de React, sin pages/): cualquier ruta
+        #    sin extensión que no resolvió como fichero sirve el index.html raíz,
+        #    dejando que el router client-side decida qué mostrar.
+        if "." not in parts[-1] and not (FRONTEND / "pages").is_dir():
+            root_index = FRONTEND / "index.html"
+            if root_index.is_file():
+                return root_index
 
         return None
 

@@ -3,7 +3,7 @@ repos:
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
-        files: ^gaia\.sh$
+        files: ^install\.sh$
 
   - repo: local
     hooks:
@@ -13,3 +13,9 @@ repos:
         language: system
         files: ^docker-compose.*\.yml$
         pass_filenames: false
+
+      - id: gaia-py-syntax
+        name: Compile gaia.py
+        entry: python3 -m py_compile
+        language: system
+        files: ^gaia\.py$
