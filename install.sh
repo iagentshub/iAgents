@@ -553,10 +553,11 @@ EOF
   "$PYTHON" gaia.py start --local
 
   # ── Resumen ───────────────────────────────────────────────────────────────
+  # shellcheck disable=SC1090
   source "${ENV_FILE}" 2>/dev/null || true
   ADMIN_PASS_FILE="${INSTALL_DIR}/iAgents/data/.admin_pass"
   ADMIN_PASS=""
-  for i in $(seq 1 15); do
+  for _ in $(seq 1 15); do
     if [ -f "$ADMIN_PASS_FILE" ]; then
       ADMIN_PASS=$(cat "$ADMIN_PASS_FILE" 2>/dev/null || true)
       break
