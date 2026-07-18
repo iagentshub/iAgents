@@ -115,8 +115,8 @@ En Windows: `python gaia.py --help` (mismo fichero, misma sintaxis).
 
 ```bash
 python3 gaia.py push                      # construye y sube TODAS las variantes: :latest y :vanilla
-python3 gaia.py push --frontend=vanilla   # limita el build/push a iagenthub/iagentshub:vanilla
-python3 gaia.py push --frontend=react     # limita el build/push a iagenthub/iagentshub:latest
+python3 gaia.py push --frontend=vanilla   # limita el build/push a iagenthub/app:vanilla
+python3 gaia.py push --frontend=react     # limita el build/push a iagenthub/app:latest
 ```
 
 En producción (CI), cada frontend publica su propia variante de la imagen unificada de forma independiente: el workflow de `frontend_vanilla` publica `:vanilla` y el de `frontend_react` publica `:latest`.

@@ -613,7 +613,7 @@ def _ensure_buildx_builder() -> None:
 
 
 def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
-    unified_img = f"{hub_user}/iagentshub:{tag}"
+    unified_img = f"{hub_user}/app:{tag}"
     backend_src = Path(os.environ.get("DEV_BACKEND_REPO") or (REPOS_ROOT / "backend_fastapi")).resolve()
 
     if frontend_variant == "vanilla":

@@ -200,14 +200,16 @@ services:
       start_period: 30s
 
   # ── Frontend (nginx sirviendo estáticos + proxy /api/) ────────────────────
-  # Imagen React inmutable, etiquetada desde CI por versión y SHA.
+  # Imagen standalone inmutable, publicada por CI desde frontend_react (:latest)
+  # o frontend_vanilla (:vanilla) — independiente de la imagen unificada que usa
+  # docker-compose.hub.yml para el modo de un solo contenedor.
   frontend:
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "15"
-    image: "${GAIA_FRONTEND_IMAGE:-${DOCKER_HUB_USER:-iagenthub}/iagentshub-frontend}:${IMAGE_TAG:-latest}"
+    image: "${GAIA_FRONTEND_IMAGE:-${DOCKER_HUB_USER:-iagenthub}/frontend}:${IMAGE_TAG:-latest}"
     environment:
       API_BASE: ""
       STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"

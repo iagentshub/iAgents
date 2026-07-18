@@ -44,7 +44,7 @@ Para saltarte los prompts (reinstalación no interactiva / CI):
 IAGENTSHUB_FRONTEND=vanilla IAGENTSHUB_MODE=docker bash install.sh
 ```
 
-> **Docker Hub:** [`iagenthub/iagentshub:latest`](https://hub.docker.com/r/iagenthub/iagentshub) (React) · `iagenthub/iagentshub:vanilla` (Vanilla)
+> **Docker Hub:** [`iagenthub/app:latest`](https://hub.docker.com/r/iagenthub/app) (React) · `iagenthub/app:vanilla` (Vanilla)
 
 Una vez instalado:
 

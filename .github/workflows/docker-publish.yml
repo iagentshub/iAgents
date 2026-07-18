@@ -54,7 +54,7 @@ jobs:
           context: build-ctx
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: iagenthub/iagentshub:latest
+          tags: iagenthub/app:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -104,6 +104,6 @@ jobs:
           context: build-ctx
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: iagenthub/iagentshub:vanilla
+          tags: iagenthub/app:vanilla
           cache-from: type=gha
           cache-to: type=gha,mode=max
