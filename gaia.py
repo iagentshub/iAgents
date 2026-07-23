@@ -85,7 +85,9 @@ FRONTEND_PID_FILE = LOCAL_DIR / "frontend.pid"
 BACKEND_LOG = LOCAL_DIR / "backend.log"
 FRONTEND_LOG = LOCAL_DIR / "frontend.log"
 VENV_DIR = IAGENTS_DIR / ".venv"
-DATA_DIR = IAGENTS_DIR / "data"
+# Mismo directorio que usa backend_fastapi/app/config/data.py por defecto (sin
+# GAIA_DATA_DIR): REPOS_ROOT/iagentshub/data, hermano de backend_fastapi/.
+DATA_DIR = REPOS_ROOT / "iagentshub" / "data"
 ENV_FILE = IAGENTS_DIR / ".env"
 
 
@@ -303,7 +305,7 @@ def init_local_data() -> None:
         secret = secrets.token_hex(32)
         settings_file.write_text('{"jwt_secret":"%s"}\n' % secret, encoding="utf-8")
         info("settings.json creado con secret aleatorio.")
-    info("Directorio de datos listo: ./data/")
+    info("Directorio de datos listo: ../iagentshub/data/")
 
 
 def _pid_alive(pid: int) -> bool:
@@ -393,7 +395,7 @@ def _local_show_info(port: str, gaia_port: str, admin_email: str) -> None:
         print(f"{BOLD}  ║{RESET}  Contraseña › {GREEN}{admin_pass}{RESET}")
     else:
         print(f"{BOLD}  ║{RESET}  Contraseña › (ver logs: python3 gaia.py logs --local)")
-    print(f"{BOLD}  ║{RESET}  Base datos › {YELLOW}SQLite — ./data/hub.db{RESET}")
+    print(f"{BOLD}  ║{RESET}  Base datos › {YELLOW}SQLite — ../iagentshub/data/hub.db{RESET}")
     print(f"{BOLD}  ╚══════════════════════════════════════════╝{RESET}")
     print()
 
@@ -769,7 +771,7 @@ def _print_local_usage() -> None:
     print("  logs     Muestra los logs en tiempo real")
     print("  status   Estado de los procesos locales")
     print()
-    print(f"  {YELLOW}Base de datos: SQLite en ./data/hub.db  (con persistencia){RESET}")
+    print(f"  {YELLOW}Base de datos: SQLite en ../iagentshub/data/hub.db  (con persistencia){RESET}")
     print(f"  {YELLOW}Sin PostgreSQL ni contenedores Docker.{RESET}")
     print(f"  {YELLOW}El frontend (vanilla/react) se fija con GAIA_FRONTEND_VARIANT en .env.{RESET}")
     print()
