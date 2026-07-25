@@ -17,6 +17,13 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ── Stage 2: imagen final ─────────────────────────────────────────────────────
 FROM python:3.12-slim
 
+# Versión de build (formato YYYYMMDDHHMMSS, UTC) — la inyecta gaia.py push o
+# el workflow de CI vía --build-arg. "dev" en builds locales sin el arg.
+# Se usa en /api/admin/check-update para comparar contra Docker Hub.
+ARG GAIA_VERSION=dev
+ENV GAIA_VERSION=$GAIA_VERSION
+LABEL org.iagentshub.version=$GAIA_VERSION
+
 # nginx + supervisor + envsubst (gettext-base)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \

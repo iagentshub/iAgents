@@ -48,13 +48,24 @@ jobs:
           cp iagentshub/docker/supervisord.conf       build-ctx/supervisord.conf
           cp iagentshub/docker/entrypoint-unified.sh  build-ctx/entrypoint-unified.sh
 
+      # Versión YYYYMMDDHHMMSS (UTC) — horneada en la imagen (GAIA_VERSION) y
+      # publicada como tag inmutable adicional. /api/admin/check-update la
+      # compara contra el tag numérico más alto en Docker Hub.
+      - name: Generar versión de build
+        id: version
+        run: echo "value=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+
       - name: Build y push imagen multi-plataforma
         uses: docker/build-push-action@v5
         with:
           context: build-ctx
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: iagenthub/app:latest
+          build-args: |
+            GAIA_VERSION=${{ steps.version.outputs.value }}
+          tags: |
+            iagenthub/app:latest
+            iagenthub/app:${{ steps.version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -98,12 +109,20 @@ jobs:
           cp iagentshub/docker/supervisord.conf                build-ctx/supervisord.conf
           cp iagentshub/docker/entrypoint-unified-vanilla.sh   build-ctx/entrypoint-unified.sh
 
+      - name: Generar versión de build
+        id: version
+        run: echo "value=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+
       - name: Build y push imagen multi-plataforma
         uses: docker/build-push-action@v5
         with:
           context: build-ctx
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: iagenthub/app:vanilla
+          build-args: |
+            GAIA_VERSION=${{ steps.version.outputs.value }}
+          tags: |
+            iagenthub/app:vanilla
+            iagenthub/app:${{ steps.version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

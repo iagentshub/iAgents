@@ -105,7 +105,16 @@ services:
 
   # Frontend: imagen nginx construida desde el repo local, ficheros estáticos como bind mount.
   # El bind mount sobreescribe el volumen nombrado en /usr/share/nginx/html.
+  #
+  # image: fijado a un nombre SOLO-LOCAL — sin esto, Compose etiqueta el build
+  # de dev con el "image:" heredado del docker-compose.yml base
+  # (iagenthub/frontend:latest), que es el MISMO nombre que la imagen real
+  # publicada en Docker Hub. Eso deja ese tag pisado en la caché local con el
+  # stub casi vacío de dev (pensado para correr solo con el bind mount de
+  # abajo) — y la próxima vez que arranques SIN --dev, Compose lo reutiliza en
+  # vez de descargar el real → nginx sirve un directorio vacío → 403.
   frontend:
+    image: iagentshub-dev/frontend:local
     depends_on:
       code-sync:
         condition: service_completed_successfully

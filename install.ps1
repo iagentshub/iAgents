@@ -189,6 +189,11 @@ DOCKER_HUB_USER=iagenthub
 # latest = React, vanilla = Vanilla -- fijado segun el frontend elegido en la instalacion
 IMAGE_TAG=$ImageTagDefault
 
+# -- Actualizacion automatica --
+# Segundos entre comprobaciones de Watchtower (default 3600 = 1h). 0 la desactiva
+# (ejecuta luego: docker compose stop watchtower).
+WATCHTOWER_INTERVAL=3600
+
 GAIA_TRUSTED_PROXIES=127.0.0.1
 "@
         $EnvContent | Out-File -FilePath "$InstallDir\.env" -Encoding utf8
@@ -246,7 +251,8 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
     Write-Host ""
     Write-Host "  Logs:       cd $InstallDir && docker compose logs -f" -ForegroundColor Cyan
     Write-Host "  Parar:      cd $InstallDir && docker compose down" -ForegroundColor Cyan
-    Write-Host "  Actualizar: irm $GithubRaw/install.ps1 | iex" -ForegroundColor Cyan
+    Write-Host "  Actualizar: automatico cada hora (Watchtower) - manual: irm $GithubRaw/install.ps1 | iex" -ForegroundColor Cyan
+    Write-Host "  Desactivar auto-actualizacion: cd $InstallDir && docker compose stop watchtower" -ForegroundColor Cyan
     Write-Host ""
 }
 
