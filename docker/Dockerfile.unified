@@ -25,13 +25,21 @@ RUN npm run prerender
 # ── Stage 2: imagen final ─────────────────────────────────────────────────────
 FROM python:3.12-slim
 
+# Versión de build (formato YYYYMMDDHHMMSS, UTC) — la inyecta gaia.py push o
+# el workflow de CI vía --build-arg. "dev" en builds locales sin el arg.
+# Se usa en /api/admin/check-update para comparar contra Docker Hub.
+ARG GAIA_VERSION=dev
+ENV GAIA_VERSION=$GAIA_VERSION
+LABEL org.iagentshub.version=$GAIA_VERSION
+
 # nginx + supervisor + envsubst (gettext-base)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
         gettext-base \
     && rm -rf /var/lib/apt/lists/* \
-    && rm -f /etc/nginx/sites-enabled/default
+    && rm -f /etc/nginx/sites-enabled/default \
+    && sed -i '/^\s*gzip on;$/d' /etc/nginx/nginx.conf
 
 # Dependencias Python instaladas en stage anterior
 COPY --from=py-builder /install /usr/local
@@ -42,9 +50,9 @@ COPY backend/ /app/
 # ── Frontend ──────────────────────────────────────────────────────────────────
 COPY --from=frontend-builder /build/dist/ /usr/share/nginx/html/
 
-# nginx.conf → conf.d/default.conf:
-# · Extraer solo el bloque server{} (las directivas gzip de la cabecera van en
-#   el http{} global del nginx.conf del sistema — ponerlas en conf.d las duplica)
+# nginx.conf → conf.d/default.conf. El `gzip on;` de fábrica de Debian en
+# nginx.conf (ver arriba) se elimina para que el de aquí no choque con un
+# "directive is duplicate" al arrancar nginx.
 # · Sustituir proxy_pass → 127.0.0.1 (backend en el mismo contenedor)
 COPY frontend/nginx.react.conf /etc/nginx/conf.d/default.conf
 RUN sed -i 's|http://backend:8765|http://127.0.0.1:8765|g' /etc/nginx/conf.d/default.conf

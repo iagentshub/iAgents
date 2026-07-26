@@ -36,6 +36,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -628,7 +629,13 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
         entrypoint_name = "entrypoint-unified.sh"
     frontend_src = Path(os.environ.get("DEV_FRONTEND_REPO") or (REPOS_ROOT / frontend_dirname)).resolve()
 
-    info(f"Construyendo imagen unificada · frontend={frontend_variant} · tag={tag}")
+    # Versión YYYYMMDDHHMMSS (UTC) — misma convención que los workflows de CI.
+    # Se hornea en la imagen (GAIA_VERSION) y se publica como tag inmutable
+    # adicional; /api/admin/check-update la compara contra Docker Hub.
+    version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    version_img = f"{hub_user}/app:{version}"
+
+    info(f"Construyendo imagen unificada · frontend={frontend_variant} · tag={tag} · versión={version}")
 
     tmpdir = Path(tempfile.mkdtemp(prefix="iagentshub_push_"))
     try:
@@ -645,8 +652,10 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
             [
                 "docker", "buildx", "build",
                 "--platform", "linux/amd64,linux/arm64",
+                "--build-arg", f"GAIA_VERSION={version}",
                 "--push",
                 "-t", unified_img,
+                "-t", version_img,
                 str(tmpdir),
             ],
             check=True,

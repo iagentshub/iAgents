@@ -2,14 +2,33 @@
 #
 # Imagen unificada: backend (FastAPI) + frontend (nginx) en un solo contenedor.
 #
-# Instalación/actualización:
+# Instalación/actualización manual:
 #   curl -fsSL https://raw.githubusercontent.com/iagentshub/iAgents/main/install.sh | bash
+#
+# Actualización automática: el servicio "watchtower" de abajo comprueba cada
+# WATCHTOWER_INTERVAL segundos (default 3600 = 1h) si hay una imagen nueva en
+# Docker Hub para el tag configurado y, si la hay, la descarga y reinicia el
+# contenedor "iagentshub" solo (usa una label para no tocar ningún otro
+# contenedor Docker que corra en el mismo host).
+#
+# Se puede activar/desactivar desde Admin → Configuración → Actualizaciones,
+# sin tocar el servidor. Para eso, "docker-proxy" (abajo) expone start/stop de
+# contenedores por HTTP SOLO dentro de la red de este compose (sin puerto
+# publicado al host) — el backend lo usa para arrancar/parar "watchtower" por
+# nombre. No permite listar contenedores, crearlos, ni exec — ver comentario
+# en el propio servicio para el detalle de por qué esa combinación exacta.
+#
+# Alternativa manual (sin pasar por el proxy): `docker compose stop
+# watchtower` / `docker compose start watchtower`, o WATCHTOWER_INTERVAL=0 en
+# .env + `docker compose up -d`.
 
 services:
 
   iagentshub:
     image: ${DOCKER_HUB_USER:-iagenthub}/app:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     logging:
       driver: "json-file"
       options:
@@ -40,6 +59,16 @@ services:
       STRIPE_PUBLISHABLE_KEY:    "${STRIPE_PUBLISHABLE_KEY:-}"
       STRIPE_WEBHOOK_SECRET:     "${STRIPE_WEBHOOK_SECRET:-}"
       API_BASE:                  ""
+      # Usados por /api/admin/check-update para saber qué repositorio de
+      # Docker Hub consultar (coincide con la imagen que se está corriendo).
+      DOCKER_HUB_USER:           "${DOCKER_HUB_USER:-iagenthub}"
+      IMAGE_TAG:                 "${IMAGE_TAG:-latest}"
+      # Usados por /api/admin/auto-update para arrancar/parar "watchtower" a
+      # través de docker-proxy (ver más abajo). DOCKER_PROXY_URL vacío = la
+      # instalación no tiene el proxy (instalaciones previas a esta versión
+      # de docker-compose.hub.yml) → el endpoint responde con un error claro.
+      DOCKER_PROXY_URL:          "http://docker-proxy:2375"
+      WATCHTOWER_CONTAINER_NAME: "watchtower"
     volumes:
       - iagentshub_data:/data
     healthcheck:
@@ -49,6 +78,60 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # ── Actualización automática ──────────────────────────────────────────────
+  # Necesita acceso al socket de Docker del host — control efectivo sobre
+  # todo el Docker del host, no solo sobre "iagentshub" (el filtrado por label
+  # limita QUÉ actualiza, no el nivel de acceso que se le concede). Es el
+  # trade-off habitual de cualquier auto-updater de contenedores; si no lo
+  # quieres asumir, comenta este bloque y actualiza solo con install.sh.
+  # containrrr/watchtower está sin mantenimiento (el binario negocia una
+  # versión de API de Docker demasiado antigua y entra en crash-loop contra
+  # daemons recientes) — se usa el fork activo nickfedor/watchtower.
+  #
+  # container_name fijo: así el backend (vía docker-proxy) siempre puede
+  # arrancarlo/pararlo por un nombre estable, sin necesitar listar
+  # contenedores (que docker-proxy no permite — ver más abajo).
+  watchtower:
+    image: nickfedor/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_INTERVAL:-3600}"
+
+  # Proxy HTTP de acceso MUY restringido al socket de Docker — permite que el
+  # backend arranque/pare "watchtower" (toggle de auto-actualización en
+  # Admin → Configuración) sin darle el socket real. Sin "ports:": solo
+  # alcanzable dentro de esta red de compose, nunca desde el host ni internet.
+  #
+  # Combinación deliberada de permisos (ver haproxy.cfg.template de la propia
+  # imagen si quieres verificarlo):
+  #   POST=1          — requisito para CUALQUIER método no-GET
+  #   ALLOW_START=1   — permite POST /containers/{nombre}/start
+  #   ALLOW_STOP=1    — permite POST /containers/{nombre}/stop
+  #   CONTAINERS=0    — (default, NO activar) bloquea listar/inspeccionar Y
+  #                     también /containers/create — con CONTAINERS=1 +
+  #                     POST=1 se podría crear y arrancar un contenedor nuevo
+  #                     con cualquier montaje/privilegio, equivalente a tener
+  #                     el socket real. Todo lo demás (EXEC, IMAGES, VOLUMES,
+  #                     NETWORKS, SECRETS, SWARM...) permanece en su default 0.
+  #
+  # Límite real de esta config: permite start/stop de CUALQUIER contenedor
+  # del host por nombre exacto (no solo "watchtower") — no crear, no exec, no
+  # tomar el host. Es el trade-off descrito y aceptado para este toggle.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      POST: 1
+      ALLOW_START: 1
+      ALLOW_STOP: 1
 
   # ── PostgreSQL (opcional) ─────────────────────────────────────────────────
   # Descomenta este bloque para usar PostgreSQL en lugar de SQLite.
