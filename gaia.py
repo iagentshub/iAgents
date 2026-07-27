@@ -36,6 +36,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,7 +75,7 @@ def warn(msg: str) -> None:
     print(f"{YELLOW}{BOLD}[gaia]{RESET} {msg}")
 
 
-def error(msg: str) -> "None":
+def error(msg: str) -> None:
     print(f"{RED}{BOLD}[gaia]{RESET} {msg}", file=sys.stderr)
     sys.exit(1)
 
@@ -132,7 +133,7 @@ def _npm_cmd(*args: str) -> list[str]:
 
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, **kwargs)
+    return subprocess.run(cmd, check=False, **kwargs)
 
 
 def run_ok(cmd: list[str], **kwargs) -> bool:
@@ -142,6 +143,7 @@ def run_ok(cmd: list[str], **kwargs) -> bool:
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                check=False,
                 **kwargs,
             ).returncode
             == 0
@@ -224,6 +226,7 @@ def _show_admin_info(compose: list[str]) -> None:
         compose + ["exec", "-T", "backend", "sh", "-c", 'printf "%s" "$GAIA_ADMIN_EMAIL"'],
         capture_output=True,
         text=True,
+        check=False,
     ).stdout.strip()
     if not admin_email:
         return
@@ -232,6 +235,7 @@ def _show_admin_info(compose: list[str]) -> None:
         compose + ["exec", "-T", "backend", "sh", "-c", 'cat "$GAIA_DATA_DIR/.admin_pass" 2>/dev/null'],
         capture_output=True,
         text=True,
+        check=False,
     ).stdout.strip()
 
     port = get_port()
@@ -304,7 +308,7 @@ def init_local_data() -> None:
     settings_file = DATA_DIR / "settings.json"
     if not settings_file.is_file():
         secret = secrets.token_hex(32)
-        settings_file.write_text('{"jwt_secret":"%s"}\n' % secret, encoding="utf-8")
+        settings_file.write_text(f'{{"jwt_secret":"{secret}"}}\n', encoding="utf-8")
         info("settings.json creado con secret aleatorio.")
     info("Directorio de datos listo: ../iagentshub/data/")
 
@@ -315,6 +319,7 @@ def _pid_alive(pid: int) -> bool:
             ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
             capture_output=True,
             text=True,
+            check=False,
         ).stdout
         return str(pid) in out
     try:
@@ -351,6 +356,7 @@ def _kill_pid(pidfile: Path) -> bool:
                 ["taskkill", "/PID", str(pid), "/T", "/F"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                check=False,
             )
         else:
             try:
@@ -362,6 +368,7 @@ def _kill_pid(pidfile: Path) -> bool:
                 ["pkill", "-P", str(pid)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                check=False,
             )
             for _ in range(10):
                 if not _pid_alive(pid):
@@ -554,28 +561,26 @@ def cmd_local_logs() -> None:
     FRONTEND_LOG.touch(exist_ok=True)
     info("Mostrando logs (Ctrl+C para salir)...")
 
-    handles = {}
-    for label, path in (("backend", BACKEND_LOG), ("frontend", FRONTEND_LOG)):
-        fh = open(path, "r", encoding="utf-8", errors="replace")
-        fh.seek(0, os.SEEK_END)
-        handles[label] = fh
+    with ExitStack() as stack:
+        handles = {}
+        for label, path in (("backend", BACKEND_LOG), ("frontend", FRONTEND_LOG)):
+            fh = stack.enter_context(open(path, encoding="utf-8", errors="replace"))
+            fh.seek(0, os.SEEK_END)
+            handles[label] = fh
 
-    try:
-        while True:
-            progressed = False
-            for label, fh in handles.items():
-                line = fh.readline()
-                while line:
-                    sys.stdout.write(f"[{label}] {line}")
-                    progressed = True
+        try:
+            while True:
+                progressed = False
+                for label, fh in handles.items():
                     line = fh.readline()
-            if not progressed:
-                time.sleep(0.3)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        for fh in handles.values():
-            fh.close()
+                    while line:
+                        sys.stdout.write(f"[{label}] {line}")
+                        progressed = True
+                        line = fh.readline()
+                if not progressed:
+                    time.sleep(0.3)
+        except KeyboardInterrupt:
+            pass
 
 
 # ── Comandos Docker ───────────────────────────────────────────────────────────
@@ -631,9 +636,11 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
 
     # Versión YYYYMMDDHHMMSS (UTC) — misma convención que los workflows de CI.
     # Se hornea en la imagen (GAIA_VERSION) y se publica como tag inmutable
-    # adicional; /api/admin/check-update la compara contra Docker Hub.
+    # adicional con el prefijo de variante (react-/vanilla-); necesario para
+    # que /api/admin/check-update compare solo contra la variante desplegada
+    # y no confunda los builds de react con los de vanilla.
     version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    version_img = f"{hub_user}/app:{version}"
+    version_img = f"{hub_user}/app:{frontend_variant}-{version}"
 
     info(f"Construyendo imagen unificada · frontend={frontend_variant} · tag={tag} · versión={version}")
 
@@ -710,7 +717,13 @@ def cmd_start(compose: list[str], dev: bool, hub: bool) -> None:
         info("Descargando imágenes actualizadas...")
         subprocess.run(compose + ["pull"], env=env, check=True)
     info("Construyendo e iniciando servicios...")
-    subprocess.run(compose + ["rm", "-f", "data-init"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        compose + ["rm", "-f", "data-init"],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
     if hub:
         subprocess.run(compose + ["up", "-d"], env=env, check=True)
     else:
@@ -736,7 +749,7 @@ def cmd_logs(compose: list[str]) -> None:
     check_docker()
     info("Mostrando logs (Ctrl+C para salir)...")
     try:
-        subprocess.run(compose + ["logs", "-f", "--tail=100"])
+        subprocess.run(compose + ["logs", "-f", "--tail=100"], check=False)
     except KeyboardInterrupt:
         pass
 
@@ -751,7 +764,13 @@ def cmd_update(compose: list[str], dev: bool, hub: bool) -> None:
     if hub:
         info("Modo Hub — descargando imágenes actualizadas de Docker Hub")
     info("Actualizando a la última versión...")
-    subprocess.run(compose + ["rm", "-f", "data-init"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        compose + ["rm", "-f", "data-init"],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
     subprocess.run(compose + ["down"], env=env, check=True)
     if hub:
         subprocess.run(compose + ["pull"], env=env, check=True)
@@ -765,7 +784,7 @@ def cmd_update(compose: list[str], dev: bool, hub: bool) -> None:
 
 def cmd_status(compose: list[str]) -> None:
     check_docker()
-    subprocess.run(compose + ["ps"])
+    subprocess.run(compose + ["ps"], check=False)
 
 
 # ── Ayuda ──────────────────────────────────────────────────────────────────────
