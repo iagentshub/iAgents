@@ -15,7 +15,10 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # Imagen con Chromium: el build usa `npm run prerender` (build + snapshot HTML
 # de las rutas públicas) para que los buscadores reciban título, descripción y
 # contenido sin ejecutar el bundle. Solo es stage de build: no engorda la final.
-FROM mcr.microsoft.com/playwright:v1.61.1-noble AS frontend-builder
+# El prerender genera estáticos independientes de la arquitectura. Ejecutarlo
+# siempre en la plataforma nativa del builder evita lanzar Chromium bajo QEMU
+# durante el target arm64, donde el proceso GPU termina con SIGTRAP.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/playwright:v1.61.1-noble AS frontend-builder
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
