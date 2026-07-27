@@ -620,6 +620,16 @@ def _ensure_buildx_builder() -> None:
         subprocess.run(["docker", "buildx", "use", "multiarch"], check=True)
 
 
+def _git_short_sha(repo: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() or "dev"
+
+
 def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
     unified_img = f"{hub_user}/app:{tag}"
     backend_src = Path(os.environ.get("DEV_BACKEND_REPO") or (REPOS_ROOT / "backend_fastapi")).resolve()
@@ -641,6 +651,8 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
     # y no confunda los builds de react con los de vanilla.
     version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     version_img = f"{hub_user}/app:{frontend_variant}-{version}"
+    backend_commit = _git_short_sha(backend_src)
+    frontend_commit = _git_short_sha(frontend_src)
 
     info(f"Construyendo imagen unificada · frontend={frontend_variant} · tag={tag} · versión={version}")
 
@@ -660,6 +672,8 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
                 "docker", "buildx", "build",
                 "--platform", "linux/amd64,linux/arm64",
                 "--build-arg", f"GAIA_VERSION={version}",
+                "--build-arg", f"BACKEND_COMMIT={backend_commit}",
+                "--build-arg", f"FRONTEND_COMMIT={frontend_commit}",
                 "--push",
                 "-t", unified_img,
                 "-t", version_img,
