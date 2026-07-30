@@ -75,7 +75,7 @@ In the next conversation, the contents of that file are automatically incorporat
 
 ---
 
-## Workspaces and collaboration
+## Groups and collaboration
 
 ### User roles
 
@@ -87,13 +87,12 @@ In the next conversation, the contents of that file are automatically incorporat
 
 ### Data model
 
-Every user has a **personal workspace** (virtual — id = username, no DB row). Team workspaces have their own rows:
+Every user has a **personal group** (virtual — id = username, no DB row). Team groups have their own rows:
 
-- **`workspaces`** — Name, creator, and creation date.
-- **`workspace_members`** — User–workspace relationship with role (`owner` / `admin` / `member`).
-- **`workspace_invitations`** — Username-based invitations with `pending` status.
-- **`workspace_groups`** / **`workspace_group_members`** — Groups within a workspace for resource sharing.
-- **`resource_groups`** — Resource–group relationship with permissions.
+- **`groups`** — Name, creator, and creation date.
+- **`group_members`** — User–group relationship with role (`owner` / `admin` / `member`).
+- **`group_invitations`** — Username-based invitations with `pending` status.
+- **`resource_group_shares`** — Resources shared with each group.
 
 ### Granular permissions
 
@@ -109,20 +108,20 @@ Permissions are managed at group level. The structure is per resource type with 
 
 ### Invitation flow
 
-1. The workspace owner invites a user from **Profile → Workspaces** by entering their username.
-2. The invitee sees the invitation under **Profile → Workspaces → Invitations** and accepts or rejects it.
-3. On acceptance, the user joins the workspace with the `member` role.
+1. The group owner invites a user from **Profile → Groups** by entering their username.
+2. The invitee sees the invitation under **Profile → Groups → Invitations** and accepts or rejects it.
+3. On acceptance, the user joins the group with the `member` role.
 
 ### Ownership transfer
 
 An owner can transfer ownership to an existing member before deleting their account:
-`POST /api/workspaces/{id}/transfer-ownership` with `{ "username": "new_owner" }`.
+`POST /api/groups/{id}/transfer-ownership` with `{ "username": "new_owner" }`.
 
 ### GDPR — right to erasure
 
 Users can request permanent account deletion from **Profile → Privacy**:
 
 - 30-day grace period with a cancellation link sent by email.
-- Workspace owners must transfer or delete their workspaces before requesting deletion.
+- Group owners must transfer or delete their groups before requesting deletion.
 - The purge cascades: messages, conversations, knowledge, connections, tokens, agents, skills, and the user account.
 - Data export available at any time (`GET /api/auth/me/export` → ZIP).

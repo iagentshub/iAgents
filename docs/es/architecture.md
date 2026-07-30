@@ -75,7 +75,7 @@ En la siguiente conversación, el contenido de ese fichero se incorpora al conte
 
 ---
 
-## Workspaces y colaboración
+## Groups y colaboración
 
 ### Roles de usuario
 
@@ -87,13 +87,12 @@ En la siguiente conversación, el contenido de ese fichero se incorpora al conte
 
 ### Modelo de datos
 
-Cada usuario tiene un **workspace personal** virtual (id = username, sin fila en BD). Los workspaces de equipo tienen entrada propia:
+Cada usuario tiene un **grupo Personal** virtual (id = username, sin fila en BD). Los grupos compartidos tienen entrada propia:
 
-- **`workspaces`** — Nombre, creador y fecha de creación.
-- **`workspace_members`** — Relación usuario–workspace con rol (`owner` / `admin` / `member`).
-- **`workspace_invitations`** — Invitaciones por username con estado `pending`.
-- **`workspace_groups`** / **`workspace_group_members`** — Grupos dentro de un workspace para compartir recursos.
-- **`resource_groups`** — Relación recurso–grupo con permisos.
+- **`groups`** — Nombre, creador y fecha de creación.
+- **`group_members`** — Relación usuario–grupo con rol (`owner` / `admin` / `member`).
+- **`group_invitations`** — Invitaciones por username con estado `pending`.
+- **`resource_group_shares`** — Recursos compartidos con cada grupo.
 
 ### Permisos granulares
 
@@ -109,20 +108,20 @@ Los permisos se gestionan a nivel de grupo. La estructura es por tipo de recurso
 
 ### Flujo de invitación
 
-1. El propietario invita desde **Perfil → Workspaces** introduciendo el username del invitado.
-2. El invitado ve la invitación en **Perfil → Workspaces → Invitaciones** y la acepta o rechaza.
-3. Al aceptar, el usuario se incorpora al workspace con rol `member`.
+1. El propietario invita desde **Perfil → Groups** introduciendo el username del invitado.
+2. El invitado ve la invitación en **Perfil → Groups → Invitaciones** y la acepta o rechaza.
+3. Al aceptar, el usuario se incorpora al grupo con rol `member`.
 
 ### Transferencia de propiedad
 
 Un propietario puede transferir la titularidad a otro miembro antes de eliminar su cuenta:
-`POST /api/workspaces/{id}/transfer-ownership` con `{ "username": "nuevo_propietario" }`.
+`POST /api/groups/{id}/transfer-ownership` con `{ "username": "nuevo_propietario" }`.
 
 ### GDPR — derecho al olvido
 
 Los usuarios pueden solicitar la eliminación completa de su cuenta desde **Perfil → Privacidad**:
 
 - Período de gracia de 30 días con enlace de cancelación por email.
-- El propietario de workspaces debe transferirlos o eliminarlos antes de solicitar el borrado.
+- El propietario de groups debe transferirlos o eliminarlos antes de solicitar el borrado.
 - La purga elimina en cascada: mensajes, conversaciones, knowledge, conexiones, tokens, agentes, skills y la cuenta de usuario.
 - Exportación de datos disponible en cualquier momento (`GET /api/auth/me/export` → ZIP).

@@ -16,7 +16,7 @@ All platform data is stored in the `data/` directory on the host. This directory
 | Path | Contents |
 |---|---|
 | `settings.json` | Global instance configuration (JWT secret, SMTP, limits) |
-| `hub.db` | Main SQLite database. Contains users, conversations, messages, connections (encrypted API keys), knowledge, workspaces, groups, and token usage. Replaced by PostgreSQL in production via `DATABASE_URL`. |
+| `hub.db` | Main SQLite database. Contains users, conversations, messages, connections (encrypted API keys), knowledge, groups, groups, and token usage. Replaced by PostgreSQL in production via `DATABASE_URL`. |
 | `agents/` | Agent configurations as `config.json` files per scope (`private/` and `public/`) |
 | `skills/` | Skills as `SKILL.md` files per scope (`private/` and `public/`) |
 | `memory/` | Memory files per agent. Created and updated automatically after each conversation when the agent has memory enabled. |
@@ -33,9 +33,9 @@ The main tables are:
 | `users` | Accounts, roles, password hash, GDPR tokens |
 | `conversations` / `messages` | Chat history |
 | `connections` | Provider credentials (API keys encrypted with AES) |
-| `knowledge_folders` / `knowledge_items` | Knowledge documents and URLs |
-| `workspaces` / `workspace_members` / `workspace_invitations` | Team workspaces and memberships |
-| `workspace_groups` / `workspace_group_members` / `resource_groups` | Groups and shared permissions |
+| `resource_folders` / `resource_folder_items` / `knowledge_items` | Folders, knowledge documents and URLs |
+| `groups` / `group_members` / `group_invitations` | Team groups and memberships |
+| `resource_group_shares` | Resources shared with groups |
 | `accounts` | Linked external accounts (Google, etc.) |
 | `token_daily` | Daily token usage per provider |
 
@@ -45,7 +45,7 @@ Migrations are incremental and applied automatically on startup (`_migrate_sqlit
 
 ## Data export (GDPR Art. 20)
 
-Each user can download all their data from **Profile → Privacy → Download my data**. The ZIP file includes profile, connections, knowledge, full conversations, workspaces, token usage, agents, and skills.
+Each user can download all their data from **Profile → Privacy → Download my data**. The ZIP file includes profile, connections, knowledge, full conversations, groups, token usage, agents, and skills.
 
 ---
 

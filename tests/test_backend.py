@@ -2,7 +2,7 @@
 
 El directorio del backend se resuelve en este orden:
   1. Variable de entorno BACKEND_DIR
-  2. ../backend_fastapi  (repo hermano en el mismo workspace)
+  2. ../backend_fastapi  (repositorio hermano en el mismo directorio padre)
 """
 
 from __future__ import annotations

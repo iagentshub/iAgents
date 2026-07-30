@@ -9,7 +9,7 @@
 
 <p align="center">
   Plataforma para crear, gestionar y compartir agentes de IA. Conecta tus propias claves de LLM, organiza los agentes en espacios de trabajo y despliega en un servidor propio en un solo comando.<br><br>
-  <em>Platform to create, manage and share AI agents. Connect your own LLM keys, organise agents in workspaces and self-host with a single command.</em>
+  <em>Platform to create, manage and share AI agents. Connect your own LLM keys, organise agents in groups and self-host with a single command.</em>
 </p>
 
 ---
