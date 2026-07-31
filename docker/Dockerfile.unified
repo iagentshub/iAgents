@@ -63,6 +63,7 @@ COPY backend/ /app/
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
 COPY --from=frontend-builder /build/dist/ /usr/share/nginx/html/
+COPY flutter-web/ /usr/share/nginx/html/app/
 
 # nginx.conf → conf.d/default.conf. El `gzip on;` de fábrica de Debian en
 # nginx.conf (ver arriba) se elimina para que el de aquí no choque con un

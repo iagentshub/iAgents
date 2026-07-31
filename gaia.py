@@ -643,6 +643,7 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
         dockerfile_name = "Dockerfile.unified"
         entrypoint_name = "entrypoint-unified.sh"
     frontend_src = Path(os.environ.get("DEV_FRONTEND_REPO") or (REPOS_ROOT / frontend_dirname)).resolve()
+    flutter_src = Path(os.environ.get("DEV_FLUTTER_REPO") or (REPOS_ROOT / "app_flutter")).resolve()
 
     # Versión YYYYMMDDHHMMSS (UTC) — misma convención que los workflows de CI.
     # Se hornea en la imagen (GAIA_VERSION) y se publica como tag inmutable
@@ -661,6 +662,23 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
         info("Preparando contexto de build (solo ficheros trackeados en git)...")
         _copy_git_tree(backend_src, tmpdir / "backend")
         _copy_git_tree(frontend_src, tmpdir / "frontend")
+        if frontend_variant == "react":
+            if not (flutter_src / "pubspec.yaml").is_file():
+                error("No se encontró pubspec.yaml en ../app_flutter/")
+            info("Compilando Flutter Web para /app/...")
+            subprocess.run(
+                [
+                    "flutter",
+                    "build",
+                    "web",
+                    "--release",
+                    "--base-href",
+                    "/app/",
+                ],
+                cwd=flutter_src,
+                check=True,
+            )
+            shutil.copytree(flutter_src / "build" / "web", tmpdir / "flutter-web")
         shutil.copy2(IAGENTS_DIR / "docker" / dockerfile_name, tmpdir / "Dockerfile")
         shutil.copy2(IAGENTS_DIR / "docker" / "supervisord.conf", tmpdir / "supervisord.conf")
         shutil.copy2(IAGENTS_DIR / "docker" / entrypoint_name, tmpdir / "entrypoint-unified.sh")
