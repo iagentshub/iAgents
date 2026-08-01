@@ -4,7 +4,7 @@
 Vive en la raíz de iAgents/ (junto a .env, data/, docker-compose*.yml) — se
 ejecuta como `python3 gaia.py <comando>`. local_proxy.py vive en scripts/.
 
-Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--frontend=<var>] [--yes]
+Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--yes]
 
   start    Arranca los servicios
   stop     Detiene los servicios
@@ -15,10 +15,9 @@ Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--frontend=<var>] [--y
   reset    Borra la base de datos y TODOS los datos, y reinstala desde cero
 
 Flags:
-  --dev              Docker con repos locales (../backend_fastapi, ../frontend_vanilla) — hot reload
+  --dev              Docker con repos locales (../backend_fastapi, ../frontend_react) — hot reload
   --hub              Docker con imágenes pre-construidas de Docker Hub   — producción rápida
   --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)
-  --frontend=<var>   Limita 'push' a una variante: vanilla|react (default: sube ambas)
   --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)
 
 Un único script, sin dependencias externas (solo librería estándar), para no
@@ -45,7 +44,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 # iAgents/ (.env, data/, .venv, docker/, docker-compose*.yml, scripts/ viven aquí)
 IAGENTS_DIR = SCRIPT_DIR
-# all_iagenthub/ (backend_fastapi, frontend_vanilla, frontend_react son hermanos de iAgents/)
+# all_iagenthub/ (backend_fastapi y frontend_react son hermanos de iAgents/)
 REPOS_ROOT = IAGENTS_DIR.parent
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -322,7 +321,13 @@ def ensure_frontend_build() -> None:
     lock_file = frontend_dir / "package-lock.json"
     dist_dir = frontend_dir / "dist"
     hash_file = dist_dir / ".build_hash"
-    cur_hash = hashlib.md5(lock_file.read_bytes()).hexdigest() if lock_file.is_file() else ""
+    lock_bytes = lock_file.read_bytes() if lock_file.is_file() else b""
+    commit = subprocess.run(
+        ["git", "-C", str(frontend_dir), "rev-parse", "HEAD"],
+        capture_output=True,
+        check=False,
+    ).stdout.strip()
+    cur_hash = hashlib.md5(lock_bytes + commit).hexdigest()
     saved_hash = hash_file.read_text().strip() if hash_file.is_file() else ""
 
     if not dist_dir.is_dir() or cur_hash != saved_hash:
@@ -443,7 +448,7 @@ def _local_show_info(port: str, gaia_port: str, admin_email: str) -> None:
 # ── Comandos modo local ───────────────────────────────────────────────────────
 
 
-def cmd_local_start(_frontend_arg: str | None) -> None:
+def cmd_local_start() -> None:
     if _is_running(BACKEND_PID_FILE) or _is_running(FRONTEND_PID_FILE):
         warn("Los servicios locales ya están en ejecución.")
         cmd_local_status()
@@ -463,18 +468,13 @@ def cmd_local_start(_frontend_arg: str | None) -> None:
         pass
 
     gaia_port = read_env_var(ENV_FILE, "GAIA_PORT", "8765")
-    admin_email = read_env_var(ENV_FILE, "GAIA_ADMIN_EMAIL", "admin@localhost")
+    admin_email = read_env_var(ENV_FILE, "GAIA_ADMIN_EMAIL", "admin@localhost.com")
     admin_reset = read_env_var(ENV_FILE, "GAIA_ADMIN_RESET", "")
     agents_secret = read_env_var(ENV_FILE, "GAIA_AGENTS_SECRET", "")
     registration = read_env_var(ENV_FILE, "GAIA_REGISTRATION", "open")
     cors_origins = read_env_var(ENV_FILE, "GAIA_CORS_ORIGINS", f"http://localhost:{port}")
-    frontend_variant = read_env_var(ENV_FILE, "GAIA_FRONTEND_VARIANT", "vanilla")
-
-    if frontend_variant == "react":
-        ensure_frontend_build()
-        frontend_dir = (REPOS_ROOT / "frontend_react" / "dist").resolve()
-    else:
-        frontend_dir = (REPOS_ROOT / "frontend_vanilla").resolve()
+    ensure_frontend_build()
+    frontend_dir = (REPOS_ROOT / "frontend_react" / "dist").resolve()
 
     # ── Comprobación previa de puertos ────────────────────────────────────
     port_conflict = False
@@ -526,7 +526,7 @@ def cmd_local_start(_frontend_arg: str | None) -> None:
 
     # ── Frontend proxy ────────────────────────────────────────────────────
     if not port_conflict:
-        info(f"Arrancando frontend proxy ({frontend_variant}) en puerto {port} ...")
+        info(f"Arrancando frontend React en puerto {port} ...")
         frontend_env = os.environ.copy()
         frontend_env.update({"PORT": port, "GAIA_PORT": gaia_port, "FRONTEND_DIR": str(frontend_dir)})
         with open(FRONTEND_LOG, "ab") as log_fh:
@@ -567,9 +567,9 @@ def cmd_local_stop() -> None:
         info("No había servicios locales en ejecución.")
 
 
-def cmd_local_restart(frontend_arg: str | None) -> None:
+def cmd_local_restart() -> None:
     cmd_local_stop()
-    cmd_local_start(frontend_arg)
+    cmd_local_start()
 
 
 def cmd_local_status() -> None:
@@ -587,14 +587,14 @@ def cmd_local_status() -> None:
     print()
 
 
-def cmd_local_reset(frontend_arg: str | None, yes: bool) -> None:
+def cmd_local_reset(yes: bool) -> None:
     _confirm_destructive("el directorio de datos local (../iagentshub/data/)", yes)
     cmd_local_stop()
     if DATA_DIR.exists():
         shutil.rmtree(DATA_DIR)
         info("Directorio de datos eliminado.")
     success("Reinstalando desde cero...")
-    cmd_local_start(frontend_arg)
+    cmd_local_start()
 
 
 def cmd_local_logs() -> None:
@@ -672,58 +672,47 @@ def _git_short_sha(repo: Path) -> str:
     return result.stdout.strip() or "dev"
 
 
-def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
+def _push_react(hub_user: str, tag: str) -> str:
     unified_img = f"{hub_user}/app:{tag}"
     backend_src = Path(os.environ.get("DEV_BACKEND_REPO") or (REPOS_ROOT / "backend_fastapi")).resolve()
-
-    if frontend_variant == "vanilla":
-        frontend_dirname = "frontend_vanilla"
-        dockerfile_name = "Dockerfile.unified.vanilla"
-        entrypoint_name = "entrypoint-unified-vanilla.sh"
-    else:
-        frontend_dirname = "frontend_react"
-        dockerfile_name = "Dockerfile.unified"
-        entrypoint_name = "entrypoint-unified.sh"
-    frontend_src = Path(os.environ.get("DEV_FRONTEND_REPO") or (REPOS_ROOT / frontend_dirname)).resolve()
+    frontend_src = Path(os.environ.get("DEV_FRONTEND_REPO") or (REPOS_ROOT / "frontend_react")).resolve()
     flutter_src = Path(os.environ.get("DEV_FLUTTER_REPO") or (REPOS_ROOT / "app_flutter")).resolve()
 
     # Versión YYYYMMDDHHMMSS (UTC) — misma convención que los workflows de CI.
     # Se hornea en la imagen (GAIA_VERSION) y se publica como tag inmutable
-    # adicional con el prefijo de variante (react-/vanilla-); necesario para
-    # que /api/admin/check-update compare solo contra la variante desplegada
-    # y no confunda los builds de react con los de vanilla.
+    # adicional con el prefijo react- para que /api/admin/check-update pueda
+    # comparar únicamente versiones de la aplicación web soportada.
     version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    version_img = f"{hub_user}/app:{frontend_variant}-{version}"
+    version_img = f"{hub_user}/app:react-{version}"
     backend_commit = _git_short_sha(backend_src)
     frontend_commit = _git_short_sha(frontend_src)
 
-    info(f"Construyendo imagen unificada · frontend={frontend_variant} · tag={tag} · versión={version}")
+    info(f"Construyendo imagen unificada React · tag={tag} · versión={version}")
 
     tmpdir = Path(tempfile.mkdtemp(prefix="iagentshub_push_"))
     try:
         info("Preparando contexto de build (solo ficheros trackeados en git)...")
         _copy_git_tree(backend_src, tmpdir / "backend")
         _copy_git_tree(frontend_src, tmpdir / "frontend")
-        if frontend_variant == "react":
-            if not (flutter_src / "pubspec.yaml").is_file():
-                error("No se encontró pubspec.yaml en ../app_flutter/")
-            info("Compilando Flutter Web para /app/...")
-            subprocess.run(
-                [
-                    "flutter",
-                    "build",
-                    "web",
-                    "--release",
-                    "--base-href",
-                    "/app/",
-                ],
-                cwd=flutter_src,
-                check=True,
-            )
-            shutil.copytree(flutter_src / "build" / "web", tmpdir / "flutter-web")
-        shutil.copy2(IAGENTS_DIR / "docker" / dockerfile_name, tmpdir / "Dockerfile")
+        if not (flutter_src / "pubspec.yaml").is_file():
+            error("No se encontró pubspec.yaml en ../app_flutter/")
+        info("Compilando Flutter Web para /app/...")
+        subprocess.run(
+            [
+                "flutter",
+                "build",
+                "web",
+                "--release",
+                "--base-href",
+                "/app/",
+            ],
+            cwd=flutter_src,
+            check=True,
+        )
+        shutil.copytree(flutter_src / "build" / "web", tmpdir / "flutter-web")
+        shutil.copy2(IAGENTS_DIR / "docker" / "Dockerfile.unified", tmpdir / "Dockerfile")
         shutil.copy2(IAGENTS_DIR / "docker" / "supervisord.conf", tmpdir / "supervisord.conf")
-        shutil.copy2(IAGENTS_DIR / "docker" / entrypoint_name, tmpdir / "entrypoint-unified.sh")
+        shutil.copy2(IAGENTS_DIR / "docker" / "entrypoint-unified.sh", tmpdir / "entrypoint-unified.sh")
 
         info(f"Construyendo imagen multi-plataforma (linux/amd64, linux/arm64) → {unified_img}")
         info("Esto tarda unos minutos la primera vez...")
@@ -747,29 +736,15 @@ def _push_variant(frontend_variant: str, hub_user: str, tag: str) -> str:
     return unified_img
 
 
-def cmd_push(frontend_arg: str | None) -> None:
+def cmd_push() -> None:
     check_docker()
     ensure_env()
-
-    if frontend_arg is not None and frontend_arg not in ("vanilla", "react"):
-        error(f"--frontend debe ser 'vanilla' o 'react' (valor: {frontend_arg})")
 
     hub_user = read_env_var(ENV_FILE, "DOCKER_HUB_USER", "iagenthub")
     _ensure_buildx_builder()
 
-    if frontend_arg is None:
-        # Sin --frontend: se suben TODAS las variantes (:latest y :vanilla).
-        # Se ignora IMAGE_TAG de .env aquí — es el tag a *descargar* en modo
-        # --hub, no tiene sentido como tag común para ambas variantes al subir.
-        info("Sin --frontend: se construyen y suben todas las variantes (react + vanilla).")
-        pushed = [
-            _push_variant("react", hub_user, "latest"),
-            _push_variant("vanilla", hub_user, "vanilla"),
-        ]
-    else:
-        tag_default = "vanilla" if frontend_arg == "vanilla" else "latest"
-        tag = read_env_var(ENV_FILE, "IMAGE_TAG", "") or tag_default
-        pushed = [_push_variant(frontend_arg, hub_user, tag)]
+    tag = read_env_var(ENV_FILE, "IMAGE_TAG", "") or "latest"
+    pushed = [_push_react(hub_user, tag)]
 
     print()
     success("Imágenes publicadas en Docker Hub:")
@@ -890,7 +865,7 @@ def _print_local_usage() -> None:
     print()
     print(f"  {YELLOW}Base de datos: SQLite en ../iagentshub/data/hub.db  (con persistencia){RESET}")
     print(f"  {YELLOW}Sin PostgreSQL ni contenedores Docker.{RESET}")
-    print(f"  {YELLOW}El frontend (vanilla/react) se fija con GAIA_FRONTEND_VARIANT en .env.{RESET}")
+    print(f"  {YELLOW}Frontend React servido desde ../frontend_react/dist.{RESET}")
     print()
 
 
@@ -907,10 +882,9 @@ def _print_docker_usage() -> None:
     print("  reset    Borra la BD y TODOS los volúmenes, y reinstala desde cero (pide confirmación)")
     print()
     print(f"{BOLD}Flags:{RESET}")
-    print("  --dev              Usa repos locales (../backend_fastapi, ../frontend_vanilla) con hot reload")
+    print("  --dev              Usa repos locales (../backend_fastapi, ../frontend_react) con hot reload")
     print("  --hub              Usa imágenes pre-construidas de Docker Hub (despliegue rápido)")
     print("  --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)")
-    print("  --frontend=<var>   Limita 'push' a una variante: vanilla|react (default: sube ambas)")
     print("  --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)")
     print()
     print(f"{BOLD}Flujo recomendado para despliegues rápidos (--hub):{RESET}")
@@ -925,7 +899,6 @@ def _print_docker_usage() -> None:
 
 def main() -> None:
     dev = local = hub = help_mode = yes = False
-    frontend_arg: str | None = None
     positional: list[str] = []
 
     for arg in sys.argv[1:]:
@@ -937,8 +910,6 @@ def main() -> None:
             hub = True
         elif arg == "--yes":
             yes = True
-        elif arg.startswith("--frontend="):
-            frontend_arg = arg.split("=", 1)[1]
         elif arg in ("-h", "--help", "help"):
             help_mode = True
         else:
@@ -958,17 +929,17 @@ def main() -> None:
             _print_local_usage()
             sys.exit(0 if help_mode else 1)
         if command == "start":
-            cmd_local_start(frontend_arg)
+            cmd_local_start()
         elif command == "stop":
             cmd_local_stop()
         elif command == "restart":
-            cmd_local_restart(frontend_arg)
+            cmd_local_restart()
         elif command == "logs":
             cmd_local_logs()
         elif command == "status":
             cmd_local_status()
         elif command == "reset":
-            cmd_local_reset(frontend_arg, yes)
+            cmd_local_reset(yes)
         else:
             error(f"Comando desconocido: {command}. Usa: python3 gaia.py --help --local")
         return
@@ -999,7 +970,7 @@ def main() -> None:
     elif command == "status":
         cmd_status(compose)
     elif command == "push":
-        cmd_push(frontend_arg)
+        cmd_push()
     elif command == "reset":
         cmd_reset(compose, dev, hub, yes)
     else:

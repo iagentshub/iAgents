@@ -152,7 +152,7 @@ services:
       GAIA_AGENTS_SECRET: ""
       # ── Seguridad ────────────────────────────────────────────────────────────
       # Email del administrador inicial (se crea automáticamente si no existe ningún admin)
-      GAIA_ADMIN_EMAIL: "admin@localhost"
+      GAIA_ADMIN_EMAIL: "admin@localhost.com"
       # Pon "true" para resetear la contraseña del admin en el próximo arranque (quitar después)
       GAIA_ADMIN_RESET: ""
       # open | closed | invite
@@ -200,9 +200,8 @@ services:
       start_period: 30s
 
   # ── Frontend (nginx sirviendo estáticos + proxy /api/) ────────────────────
-  # Imagen standalone inmutable, publicada por CI desde frontend_react (:latest)
-  # o frontend_vanilla (:vanilla) — independiente de la imagen unificada que usa
-  # docker-compose.hub.yml para el modo de un solo contenedor.
+  # Imagen standalone React inmutable, independiente de la imagen unificada que
+  # usa docker-compose.hub.yml para el modo de un solo contenedor.
   frontend:
     logging:
       driver: "json-file"

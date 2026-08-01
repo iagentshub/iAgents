@@ -13,10 +13,9 @@ Installation is a single script per OS (`install.sh` / `install.ps1`) and day-to
 
 ## One-command installation
 
-One URL per operating system. The script interactively asks:
-
-1. **Frontend** — Vanilla (static, no build) or React (SPA, requires Node.js).
-2. **Mode** — Docker (recommended, includes optional PostgreSQL) or without Docker (Python/Node directly, SQLite).
+One URL per operating system. The script installs React and asks for the
+**mode**: Docker (recommended, includes optional PostgreSQL) or without Docker
+(Python/Node directly, SQLite).
 
 ### 🐳🐧🍎 Linux / macOS
 
@@ -46,10 +45,10 @@ powershell -File install.ps1 --help
 ### Skipping the prompts (CI / non-interactive reinstall)
 
 ```bash
-IAGENTSHUB_FRONTEND=vanilla IAGENTSHUB_MODE=docker bash install.sh
+IAGENTSHUB_MODE=docker bash install.sh
 ```
 ```powershell
-$env:IAGENTSHUB_FRONTEND = "vanilla"; $env:IAGENTSHUB_MODE = "docker"
+$env:IAGENTSHUB_MODE = "docker"
 irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
@@ -95,7 +94,7 @@ On Windows: `python gaia.py --help` (same file, same syntax).
 | `update` | Downloads the latest version and restarts *(Docker only)* |
 | `logs` | Shows live activity |
 | `status` | Current status of the services |
-| `push` | Builds the unified images (both variants by default) and pushes them to Docker Hub *(Docker only)* |
+| `push` | Builds the unified React image and pushes it to Docker Hub *(Docker only)* |
 | `reset` | Wipes the database and all data, and reinstalls from scratch *(asks for confirmation)* |
 
 ---
@@ -104,23 +103,21 @@ On Windows: `python gaia.py --help` (same file, same syntax).
 
 **Production mode** — the default behavior (no flags). Always downloads the latest version of each repository from GitHub before building. Recommended for real environments.
 
-**Development mode** (`--dev`) — uses the developer's local repositories (`../backend_fastapi`, `../frontend_vanilla` or `../frontend_react` via profile) instead of downloading from GitHub. Allows iterating without pushing every change.
+**Development mode** (`--dev`) — uses the developer's local repositories (`../backend_fastapi` and `../frontend_react`) instead of downloading from GitHub. Allows iterating without pushing every change.
 
-**Hub mode** (`--hub`) — uses the pre-built unified image from Docker Hub (backend + frontend in a single container). This is the mode `install.sh` uses on the Docker branch. The image tag (`latest`=React, `vanilla`=Vanilla) is controlled by `IMAGE_TAG` in `.env`.
+**Hub mode** (`--hub`) — uses the pre-built unified React image from Docker Hub (backend + frontend in a single container). The tag is controlled by `IMAGE_TAG` in `.env`.
 
-**Local mode** (`--local`) — no Docker: uvicorn plus a Python proxy serve the app (SQLite). Which frontend gets served (Vanilla or React) is controlled by `GAIA_FRONTEND_VARIANT` in `.env`; if it's `react`, `gaia.py` runs `npm run build` the first time (or whenever `dist/` is missing) and serves that output as static files — there's no persistent Vite server.
+**Local mode** (`--local`) — no Docker: uvicorn plus a Python proxy serve the React app (SQLite). `gaia.py` runs `npm run build` when `dist/` is missing or dependencies change, then serves the static output.
 
 ---
 
 ## Publishing the unified images (`push`)
 
 ```bash
-python3 gaia.py push                      # build and push ALL variants: :latest and :vanilla
-python3 gaia.py push --frontend=vanilla   # limit the build/push to iagenthub/app:vanilla
-python3 gaia.py push --frontend=react     # limit the build/push to iagenthub/app:latest
+python3 gaia.py push  # build and push iagenthub/app:latest
 ```
 
-In production (CI), each frontend independently publishes its own variant of the unified image: `frontend_vanilla`'s workflow publishes `:vanilla` and `frontend_react`'s publishes `:latest`.
+In production, CI publishes the unified React image with `:latest` and an immutable version tag.
 
 ---
 

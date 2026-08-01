@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # install.sh — Instalación y actualización de iAgents Hub (Linux / macOS)
 #
-# Un único comando para las 4 combinaciones posibles: el script pregunta
-# qué frontend (Vanilla o React) y qué modo (Docker o sin Docker) instalar.
+# Un único comando para instalar el frontend React en Docker o sin Docker.
 #
 #   curl -fsSL https://raw.githubusercontent.com/iagentshub/iAgents/main/install.sh | bash
 #
 # Para saltarte los prompts (CI, scripts, reinstalación no interactiva):
-#   IAGENTSHUB_FRONTEND=vanilla|react  IAGENTSHUB_MODE=docker|local  bash install.sh
+#   IAGENTSHUB_MODE=docker|local  bash install.sh
 #
 # Docker:     solo requiere Docker. No clona repositorios (usa imágenes de Docker Hub).
-# Sin Docker: instala Python 3.11+, git y (si eliges React) Node.js LTS mediante el
+# Sin Docker: instala Python 3.11+, git y Node.js LTS mediante el
 #             gestor de paquetes nativo del sistema (apt/dnf/yum/pacman/zypper/Homebrew),
 #             clona los repos como hermanos y arranca con gaia.py --local (SQLite).
 
@@ -36,22 +35,20 @@ case "${1:-}" in
     cat <<EOF
 ${BOLD}Uso:${RESET} install.sh
 
-Instala o actualiza iAgents Hub. Pregunta interactivamente:
-  1) Frontend: Vanilla (estático) o React (SPA, requiere Node.js)
-  2) Modo: Docker (recomendado) o sin Docker (Python/Node directos, SQLite)
+Instala o actualiza iAgents Hub con el frontend React. Pregunta interactivamente:
+  1) Modo: Docker (recomendado) o sin Docker (Python/Node directos, SQLite)
 
 ${BOLD}Variables de entorno${RESET} (para saltarte los prompts):
-  IAGENTSHUB_FRONTEND=vanilla|react   Frontend a instalar
   IAGENTSHUB_MODE=docker|local        Modo de instalación
   IAGENTSHUB_DIR=<ruta>               Directorio de instalación (default: \$HOME/iagentshub)
 
 ${BOLD}Ejemplos:${RESET}
   curl -fsSL ${GITHUB_RAW:-https://raw.githubusercontent.com/iagentshub/iAgents/main}/install.sh | bash
-  IAGENTSHUB_FRONTEND=vanilla IAGENTSHUB_MODE=docker bash install.sh
+  IAGENTSHUB_MODE=docker bash install.sh
 
 ${BOLD}Requisitos:${RESET}
   Docker:     solo Docker (no clona repositorios, usa imágenes de Docker Hub).
-  Sin Docker: instala Python 3.11+, git y (si eliges React) Node.js LTS mediante
+  Sin Docker: instala Python 3.11+, git y Node.js LTS mediante
               el gestor de paquetes nativo del sistema.
 EOF
     exit 0
@@ -69,7 +66,6 @@ esac
 
 REPO_URL="https://github.com/iagentshub/iAgents.git"
 BACKEND_REPO_URL="https://github.com/iagentshub/backend_fastapi.git"
-FRONTEND_VANILLA_URL="https://github.com/iagentshub/frontend_vanilla.git"
 FRONTEND_REACT_URL="https://github.com/iagentshub/frontend_react.git"
 GITHUB_RAW="https://raw.githubusercontent.com/iagentshub/iAgents/main"
 COMPOSE_URL="${GITHUB_RAW}/docker-compose.hub.yml"
@@ -89,33 +85,10 @@ echo -e "${BOLD}║           iAgents Hub                   ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo
 
-# ── Prompt 1: frontend ────────────────────────────────────────────────────────
-step "Frontend"
-echo "  1) Vanilla  — estático, sin build, más ligero (recomendado)"
-echo "  2) React    — SPA nueva, en migración (requiere Node.js)"
-FRONTEND_ANSWER=""
-if [ -t 0 ] && [ -z "${IAGENTSHUB_FRONTEND:-}" ]; then
-  read -rp "  Elige [1-2] (default 1): " FRONTEND_ANSWER
-fi
-FRONTEND_VARIANT="${IAGENTSHUB_FRONTEND:-}"
-if [ -z "$FRONTEND_VARIANT" ]; then
-  case "$FRONTEND_ANSWER" in
-    2) FRONTEND_VARIANT="react" ;;
-    *) FRONTEND_VARIANT="vanilla" ;;
-  esac
-fi
-[ "$FRONTEND_VARIANT" = "vanilla" ] || [ "$FRONTEND_VARIANT" = "react" ] \
-  || error "IAGENTSHUB_FRONTEND debe ser 'vanilla' o 'react' (valor: ${FRONTEND_VARIANT})"
-success "Frontend: ${FRONTEND_VARIANT}"
-
-# ── Prompt 2: modo de instalación ─────────────────────────────────────────────
+# ── Modo de instalación ───────────────────────────────────────────────────────
 step "Modo de instalación"
 echo "  1) Docker      — recomendado, aislado, incluye PostgreSQL opcional"
-if [ "$FRONTEND_VARIANT" = "react" ]; then
-  echo "  2) Sin Docker  — Python + Node.js directos, SQLite"
-else
-  echo "  2) Sin Docker  — Python directo, SQLite"
-fi
+echo "  2) Sin Docker  — Python + Node.js directos, SQLite"
 MODE_ANSWER=""
 if [ -t 0 ] && [ -z "${IAGENTSHUB_MODE:-}" ]; then
   read -rp "  Elige [1-2] (default 1): " MODE_ANSWER
@@ -161,20 +134,17 @@ install_docker() {
   curl -fsSL "${COMPOSE_URL}" -o docker-compose.yml
   success "docker-compose.yml actualizado."
 
-  IMAGE_TAG_DEFAULT="latest"
-  [ "$FRONTEND_VARIANT" = "vanilla" ] && IMAGE_TAG_DEFAULT="vanilla"
-
   if $FIRST_INSTALL; then
     step "Configurando variables de entorno"
     echo
 
     if [ -t 0 ]; then
       read -rp "  Dominio público (ej: https://miapp.com) [http://localhost:8007]: " INPUT_URL
-      read -rp "  Email del administrador [admin@localhost]: " INPUT_EMAIL
+      read -rp "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
       read -rp "  Puerto del frontend [8007]: " INPUT_PORT
     fi
     FRONTEND_URL="${INPUT_URL:-http://localhost:8007}"
-    ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost}"
+    ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost.com}"
     PORT="${INPUT_PORT:-8007}"
 
     AGENTS_SECRET=$(_rand_hex)
@@ -226,8 +196,8 @@ STRIPE_WEBHOOK_SECRET=
 
 # ── Docker Hub ────────────────────────────────────────────────────────────────
 DOCKER_HUB_USER=iagenthub
-# latest = React · vanilla = Vanilla — fijado según el frontend elegido en la instalación
-IMAGE_TAG=${IMAGE_TAG_DEFAULT}
+# Imagen React estable
+IMAGE_TAG=latest
 
 # ── Actualización automática ───────────────────────────────────────────────────
 # Segundos entre comprobaciones de Watchtower (default 3600 = 1h). 0 la desactiva
@@ -240,6 +210,13 @@ EOF
     success ".env creado."
   else
     warn ".env existente conservado. Edita ${INSTALL_DIR}/.env para cambiar la configuración."
+    if grep -q '^IMAGE_TAG=' .env; then
+      awk 'BEGIN { done=0 } /^IMAGE_TAG=/ { print "IMAGE_TAG=latest"; done=1; next } { print } END { if (!done) print "IMAGE_TAG=latest" }' .env > .env.tmp
+      mv .env.tmp .env
+    else
+      echo 'IMAGE_TAG=latest' >> .env
+    fi
+    info "IMAGE_TAG=latest aplicado para usar React."
   fi
 
   echo
@@ -286,8 +263,8 @@ EOF
     echo -e "${BOLD}╠══════════════════════════════════════════╣${RESET}"
   fi
   echo -e "${BOLD}║${RESET}  URL         › ${CYAN}${GAIA_FRONTEND_URL:-http://localhost:${PORT:-8007}}${RESET}"
-  echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}${FRONTEND_VARIANT}${RESET}"
-  echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost}${RESET}"
+  echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}React${RESET}"
+  echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
   if [ -n "${ADMIN_PASS:-}" ]; then
     echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
   else
@@ -441,48 +418,36 @@ install_local() {
     success "git ya instalado: $(git --version)"
   fi
 
-  # ── 4. Node.js (solo si el frontend elegido es React) ────────────────────
-  if [ "$FRONTEND_VARIANT" = "react" ]; then
-    step "Comprobando Node.js"
-    if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
-      info "Node.js no encontrado. Instalando..."
-      if $IS_MAC; then
-        brew install node
-      else
-        _detect_pkg_manager
-        case "$PKG_MANAGER" in
-          apt-get) $PKG_INSTALL nodejs npm ;;
-          dnf|yum) $PKG_INSTALL nodejs npm ;;
-          pacman)  $PKG_INSTALL nodejs npm ;;
-          zypper)  $PKG_INSTALL nodejs20 npm20 2>/dev/null || $PKG_INSTALL nodejs npm ;;
-        esac
-      fi
-      command -v node &>/dev/null || error "No se pudo instalar Node.js automáticamente. Instálalo manualmente desde https://nodejs.org y vuelve a ejecutar este script."
-      success "Node.js instalado: $(node --version)"
+  # ── 4. Node.js ───────────────────────────────────────────────────────────
+  step "Comprobando Node.js"
+  if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
+    info "Node.js no encontrado. Instalando..."
+    if $IS_MAC; then
+      brew install node
     else
-      success "Node.js encontrado: $(node --version)"
+      _detect_pkg_manager
+      case "$PKG_MANAGER" in
+        apt-get) $PKG_INSTALL nodejs npm ;;
+        dnf|yum) $PKG_INSTALL nodejs npm ;;
+        pacman)  $PKG_INSTALL nodejs npm ;;
+        zypper)  $PKG_INSTALL nodejs20 npm20 2>/dev/null || $PKG_INSTALL nodejs npm ;;
+      esac
     fi
+    command -v node &>/dev/null || error "No se pudo instalar Node.js automáticamente. Instálalo manualmente desde https://nodejs.org y vuelve a ejecutar este script."
+    success "Node.js instalado: $(node --version)"
+  else
+    success "Node.js encontrado: $(node --version)"
   fi
 
   # ── 5. Clonar o actualizar repositorios ───────────────────────────────────
-  # iagentshub/backend_fastapi/frontend_{vanilla,react} son repos separados que
-  # deben quedar como hermanos dentro de INSTALL_DIR — gaia.py (dentro de
-  # iAgents/) resuelve ../backend_fastapi y ../frontend_<variante> de forma
-  # relativa, y espera este layout exacto.
+  # iAgents, backend_fastapi y frontend_react deben quedar como hermanos dentro
+  # de INSTALL_DIR; gaia.py resuelve esas rutas de forma relativa.
   step "Repositorios"
   mkdir -p "${INSTALL_DIR}"
 
-  if [ "$FRONTEND_VARIANT" = "react" ]; then
-    FRONTEND_REPO_URL="$FRONTEND_REACT_URL"
-    FRONTEND_DIRNAME="frontend_react"
-  else
-    FRONTEND_REPO_URL="$FRONTEND_VANILLA_URL"
-    FRONTEND_DIRNAME="frontend_vanilla"
-  fi
-
   _clone_or_update "${REPO_URL}"          "${INSTALL_DIR}/iAgents"                "iagentshub"
   _clone_or_update "${BACKEND_REPO_URL}"  "${INSTALL_DIR}/backend_fastapi"        "backend"
-  _clone_or_update "${FRONTEND_REPO_URL}" "${INSTALL_DIR}/${FRONTEND_DIRNAME}"    "frontend (${FRONTEND_VARIANT})"
+  _clone_or_update "${FRONTEND_REACT_URL}" "${INSTALL_DIR}/frontend_react"         "frontend React"
   success "Repositorios listos."
 
   # El entorno virtual/dependencias Python y el build de React los gestiona
@@ -496,10 +461,10 @@ install_local() {
     echo
 
     if [ -t 0 ]; then
-      read -rp "  Email del administrador [admin@localhost]: " INPUT_EMAIL
+      read -rp "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
       read -rp "  Puerto [8007]: " INPUT_PORT
     fi
-    ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost}"
+    ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost.com}"
     PORT="${INPUT_PORT:-8007}"
 
     SECRET=$("$PYTHON" -c "import secrets; print(secrets.token_hex(32))")
@@ -512,9 +477,6 @@ install_local() {
 PORT=${PORT}
 GAIA_PORT=8765
 GAIA_FRONTEND_URL=http://localhost:${PORT}
-
-# vanilla | react — fijado según lo elegido en la instalación
-GAIA_FRONTEND_VARIANT=${FRONTEND_VARIANT}
 
 # Secreto JWT — generado automáticamente
 GAIA_AGENTS_SECRET=${SECRET}
@@ -545,12 +507,6 @@ EOF
     success ".env creado."
   else
     warn ".env existente conservado (${ENV_FILE})."
-    # Instalaciones previas a esta versión no tienen GAIA_FRONTEND_VARIANT —
-    # añadirla si falta, respetando el frontend clonado en este mismo run.
-    if ! grep -q '^GAIA_FRONTEND_VARIANT=' "$ENV_FILE" 2>/dev/null; then
-      echo "GAIA_FRONTEND_VARIANT=${FRONTEND_VARIANT}" >> "$ENV_FILE"
-      info "GAIA_FRONTEND_VARIANT=${FRONTEND_VARIANT} añadido a .env"
-    fi
   fi
 
   # ── 7. Arrancar ───────────────────────────────────────────────────────────
@@ -582,8 +538,8 @@ EOF
     echo -e "${BOLD}╠══════════════════════════════════════════╣${RESET}"
   fi
   echo -e "${BOLD}║${RESET}  URL         › ${CYAN}http://localhost:${PORT:-8007}${RESET}"
-  echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}${FRONTEND_VARIANT}${RESET}"
-  echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost}${RESET}"
+  echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}React${RESET}"
+  echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
   if [ -n "${ADMIN_PASS}" ]; then
     echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
   else

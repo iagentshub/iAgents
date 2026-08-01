@@ -13,10 +13,9 @@ La instalación se hace con un único script por SO (`install.sh` / `install.ps1
 
 ## Instalación de un solo comando
 
-Una única URL por sistema operativo. El script pregunta interactivamente:
-
-1. **Frontend** — Vanilla (estático, sin build) o React (SPA, requiere Node.js).
-2. **Modo** — Docker (recomendado, incluye PostgreSQL opcional) o sin Docker (Python/Node directos, SQLite).
+Una única URL por sistema operativo. El script instala React y pregunta por el
+**modo**: Docker (recomendado, incluye PostgreSQL opcional) o sin Docker
+(Python/Node directos, SQLite).
 
 ### 🐳🐧🍎 Linux / macOS
 
@@ -46,10 +45,10 @@ powershell -File install.ps1 --help
 ### Saltarte los prompts (CI / reinstalación no interactiva)
 
 ```bash
-IAGENTSHUB_FRONTEND=vanilla IAGENTSHUB_MODE=docker bash install.sh
+IAGENTSHUB_MODE=docker bash install.sh
 ```
 ```powershell
-$env:IAGENTSHUB_FRONTEND = "vanilla"; $env:IAGENTSHUB_MODE = "docker"
+$env:IAGENTSHUB_MODE = "docker"
 irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
@@ -95,7 +94,7 @@ En Windows: `python gaia.py --help` (mismo fichero, misma sintaxis).
 | `update` | Descarga la última versión y reinicia *(solo Docker)* |
 | `logs` | Muestra la actividad en tiempo real |
 | `status` | Estado actual de los servicios |
-| `push` | Construye las imágenes unificadas (ambas variantes por defecto) y las sube a Docker Hub *(solo Docker)* |
+| `push` | Construye la imagen unificada React y la sube a Docker Hub *(solo Docker)* |
 | `reset` | Borra la base de datos y todos los datos, y reinstala desde cero *(pide confirmación)* |
 
 ---
@@ -104,23 +103,21 @@ En Windows: `python gaia.py --help` (mismo fichero, misma sintaxis).
 
 **Modo producción** — el comportamiento por defecto (sin flags). Descarga siempre la última versión de cada repositorio desde GitHub antes de construir. Recomendado para entornos reales.
 
-**Modo desarrollo** (`--dev`) — usa los repositorios locales del desarrollador (`../backend_fastapi`, `../frontend_vanilla` o `../frontend_react` según el profile) en lugar de descargar desde GitHub. Permite iterar sin hacer push de cada cambio.
+**Modo desarrollo** (`--dev`) — usa los repositorios locales del desarrollador (`../backend_fastapi` y `../frontend_react`) en lugar de descargar desde GitHub. Permite iterar sin hacer push de cada cambio.
 
-**Modo Hub** (`--hub`) — usa la imagen unificada pre-construida de Docker Hub (backend + frontend en un único contenedor). Es el modo que usa `install.sh` en la rama Docker. El tag de imagen (`latest`=React, `vanilla`=Vanilla) se controla con `IMAGE_TAG` en `.env`.
+**Modo Hub** (`--hub`) — usa la imagen unificada React pre-construida de Docker Hub (backend + frontend en un único contenedor). El tag se controla con `IMAGE_TAG` en `.env`.
 
-**Modo local** (`--local`) — sin Docker: uvicorn + un proxy Python sirven la app (SQLite). El frontend servido (Vanilla o React) se controla con `GAIA_FRONTEND_VARIANT` en `.env`; si es `react`, `gaia.py` ejecuta `npm run build` la primera vez (o si faltara `dist/`) y sirve ese resultado como estático — no hay servidor Vite persistente.
+**Modo local** (`--local`) — sin Docker: uvicorn + un proxy Python sirven la app React (SQLite). `gaia.py` ejecuta `npm run build` cuando falta `dist/` o cambian las dependencias y sirve ese resultado como estático.
 
 ---
 
 ## Publicar las imágenes unificadas (`push`)
 
 ```bash
-python3 gaia.py push                      # construye y sube TODAS las variantes: :latest y :vanilla
-python3 gaia.py push --frontend=vanilla   # limita el build/push a iagenthub/app:vanilla
-python3 gaia.py push --frontend=react     # limita el build/push a iagenthub/app:latest
+python3 gaia.py push  # construye y sube iagenthub/app:latest
 ```
 
-En producción (CI), cada frontend publica su propia variante de la imagen unificada de forma independiente: el workflow de `frontend_vanilla` publica `:vanilla` y el de `frontend_react` publica `:latest`.
+En producción, CI publica la imagen unificada React con el tag `:latest` y un tag de versión inmutable.
 
 ---
 

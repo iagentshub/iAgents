@@ -37,7 +37,7 @@ Las variables que controlan este comportamiento son:
 
 | Variable | Valor por defecto | Descripción |
 |---|---|---|
-| `GAIA_ADMIN_EMAIL` | `admin@localhost` | Email (y nombre de usuario) de la cuenta administrador inicial. |
+| `GAIA_ADMIN_EMAIL` | `admin@localhost.com` | Email (y nombre de usuario) de la cuenta administrador inicial. |
 | `GAIA_ADMIN_RESET` | *(vacío)* | Pon `true` para resetear la contraseña del admin en el próximo arranque. **Quitar después del arranque.** |
 
 ---
@@ -51,14 +51,11 @@ Las variables que controlan este comportamiento son:
 
 ---
 
-## Variante de frontend
-
-`install.sh` / `install.ps1` fijan estas variables automáticamente según lo que elijas durante la instalación — solo relevante si editas `.env` a mano.
+## Imagen del frontend
 
 | Variable | Opciones | Descripción |
 |---|---|---|
-| `GAIA_FRONTEND_VARIANT` | `vanilla` / `react` | Solo en modo local (`--local`, sin Docker). Qué frontend sirve `gaia.py`. Si es `react`, ejecuta `npm run build` la primera vez (requiere Node.js) y sirve el resultado estático de `dist/`. |
-| `IMAGE_TAG` | `latest` / `vanilla` / cualquier tag | Solo en modo Docker Hub (`--hub`). Qué tag de la imagen unificada se descarga: `latest` es la build de React, `vanilla` la de Vanilla. |
+| `IMAGE_TAG` | `latest` / cualquier tag React | Solo en modo Docker Hub (`--hub`). Qué versión de la imagen unificada React se descarga. |
 
 ---
 

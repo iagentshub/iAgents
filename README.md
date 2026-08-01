@@ -16,8 +16,8 @@
 
 ## Instalación / Install
 
-Una única URL por sistema operativo. El script pregunta interactivamente qué
-**frontend** quieres (Vanilla o React) y qué **modo** (Docker o sin Docker):
+Una única URL por sistema operativo. El instalador usa el frontend React y
+pregunta qué **modo** quieres (Docker o sin Docker):
 
 | | Plataforma | Comando |
 |---|---|---|
@@ -33,18 +33,17 @@ irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
 El script:
-1. Pregunta el frontend: **Vanilla** (estático, sin build) o **React** (SPA, requiere Node.js).
-2. Pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite).
-3. Instala lo que falte (Docker no instala nada más; sin Docker instala Python 3.11+, git y, si eliges React, Node.js — todo vía el gestor de paquetes nativo: apt/dnf/yum/pacman/zypper, Homebrew o winget).
-4. Arranca la aplicación y muestra la URL, el email de admin y la contraseña generada.
+1. Pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite).
+2. Instala lo que falte (Docker no instala nada más; sin Docker instala Python 3.11+, git y Node.js mediante el gestor de paquetes nativo).
+3. Arranca la aplicación React y muestra la URL, el email de admin y la contraseña generada.
 
 Para saltarte los prompts (reinstalación no interactiva / CI):
 
 ```bash
-IAGENTSHUB_FRONTEND=vanilla IAGENTSHUB_MODE=docker bash install.sh
+IAGENTSHUB_MODE=docker bash install.sh
 ```
 
-> **Docker Hub:** [`iagenthub/app:latest`](https://hub.docker.com/r/iagenthub/app) (React) · `iagenthub/app:vanilla` (Vanilla)
+> **Docker Hub:** [`iagenthub/app:latest`](https://hub.docker.com/r/iagenthub/app)
 
 Una vez instalado:
 
@@ -79,9 +78,7 @@ python3 gaia.py start --hub         # Docker, imágenes de Docker Hub
 python3 gaia.py start --dev         # Docker, hot reload con código local
 python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)
 
-python3 gaia.py push                      # construir y subir TODAS las imágenes (:latest + :vanilla)
-python3 gaia.py push --frontend=vanilla   # construir y subir solo :vanilla
-python3 gaia.py push --frontend=react     # construir y subir solo :latest
+python3 gaia.py push                # construir y subir la imagen React :latest
 
 python3 gaia.py reset                     # borra la BD y TODOS los volúmenes, reinstala desde cero
 python3 gaia.py reset --local             # borra ../iagentshub/data/ y reinstala desde cero
