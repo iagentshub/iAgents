@@ -110,6 +110,8 @@ function Install-Docker {
         Write-Host ""
         $FrontendUrl = Read-Host "  Dominio publico (ej: https://miapp.com) [http://localhost:8007]"
         if (-not $FrontendUrl) { $FrontendUrl = "http://localhost:8007" }
+        $AdminUsername = Read-Host "  Usuario publico del administrador [admin]"
+        if (-not $AdminUsername) { $AdminUsername = "admin" }
         $AdminEmail = Read-Host "  Email del administrador [admin@localhost.com]"
         if (-not $AdminEmail) { $AdminEmail = "admin@localhost.com" }
         $Port = Read-Host "  Puerto del frontend [8007]"
@@ -130,6 +132,7 @@ GAIA_FRONTEND_URL=$FrontendUrl
 # Secreto JWT -- generado automaticamente
 GAIA_AGENTS_SECRET=$AgentsSecret
 
+GAIA_ADMIN_USERNAME=$AdminUsername
 GAIA_ADMIN_EMAIL=$AdminEmail
 # Descomenta para resetear la contrasena del admin en el proximo arranque:
 # GAIA_ADMIN_RESET=true
@@ -210,11 +213,13 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
     $AdminPass = $AdminPass.Trim()
 
     $PortFinal = $Port
+    $AdminUsernameFinal = if ($AdminUsername) { $AdminUsername } else { "admin" }
     $AdminEmailFinal = $AdminEmail
     $FrontendUrlFinal = $FrontendUrl
     if (-not $FirstInstall) {
         Get-Content "$InstallDir\.env" | ForEach-Object {
             if ($_ -match "^PORT=") { $PortFinal = $_.Split("=", 2)[1].Trim() }
+            if ($_ -match "^GAIA_ADMIN_USERNAME=") { $AdminUsernameFinal = $_.Split("=", 2)[1].Trim() }
             if ($_ -match "^GAIA_ADMIN_EMAIL=") { $AdminEmailFinal = $_.Split("=", 2)[1].Trim() }
             if ($_ -match "^GAIA_FRONTEND_URL=") { $FrontendUrlFinal = $_.Split("=", 2)[1].Trim() }
         }
@@ -227,7 +232,8 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
     Write-Host "╠══════════════════════════════════════════╣" -ForegroundColor Green
     Write-Host "  URL         > $FrontendUrlFinal" -ForegroundColor Cyan
     Write-Host "  Frontend    > React" -ForegroundColor Cyan
-    Write-Host "  Admin       > $AdminEmailFinal" -ForegroundColor Cyan
+    Write-Host "  Usuario     > $AdminUsernameFinal" -ForegroundColor Cyan
+    Write-Host "  Email       > $AdminEmailFinal" -ForegroundColor Cyan
     if ($AdminPass) {
         Write-Host "  Contrasena  > $AdminPass" -ForegroundColor Green
     } else {
@@ -329,6 +335,8 @@ function Install-Local {
     if ($FirstInstall) {
         Write-Step "Configuracion inicial"
         Write-Host ""
+        $AdminUsername = Read-Host "  Usuario publico del administrador [admin]"
+        if (-not $AdminUsername) { $AdminUsername = "admin" }
         $AdminEmail = Read-Host "  Email del administrador [admin@localhost.com]"
         if (-not $AdminEmail) { $AdminEmail = "admin@localhost.com" }
         $Port = Read-Host "  Puerto [8007]"
@@ -351,6 +359,7 @@ GAIA_FRONTEND_URL=http://localhost:$Port
 # Secreto JWT -- generado automaticamente
 GAIA_AGENTS_SECRET=$Secret
 
+GAIA_ADMIN_USERNAME=$AdminUsername
 GAIA_ADMIN_EMAIL=$AdminEmail
 # Descomenta para resetear la contrasena del admin en el proximo arranque:
 # GAIA_ADMIN_RESET=true
@@ -397,9 +406,11 @@ DATABASE_URL=
     }
 
     $PortFinal = "8007"
+    $AdminUsernameFinal = "admin"
     $AdminEmailFinal = "admin@localhost.com"
     Get-Content $EnvFile | ForEach-Object {
         if ($_ -match "^PORT=") { $PortFinal = $_.Split("=", 2)[1].Trim() }
+        if ($_ -match "^GAIA_ADMIN_USERNAME=") { $AdminUsernameFinal = $_.Split("=", 2)[1].Trim() }
         if ($_ -match "^GAIA_ADMIN_EMAIL=") { $AdminEmailFinal = $_.Split("=", 2)[1].Trim() }
     }
 
@@ -410,7 +421,8 @@ DATABASE_URL=
     Write-Host "╠══════════════════════════════════════════╣" -ForegroundColor Green
     Write-Host "  URL         > http://localhost:$PortFinal" -ForegroundColor Cyan
     Write-Host "  Frontend    > React" -ForegroundColor Cyan
-    Write-Host "  Admin       > $AdminEmailFinal" -ForegroundColor Cyan
+    Write-Host "  Usuario     > $AdminUsernameFinal" -ForegroundColor Cyan
+    Write-Host "  Email       > $AdminEmailFinal" -ForegroundColor Cyan
     if ($AdminPass) {
         Write-Host "  Contrasena  > $AdminPass" -ForegroundColor Green
     } else {

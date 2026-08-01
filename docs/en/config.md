@@ -37,7 +37,8 @@ The variables controlling this behaviour are:
 
 | Variable | Default | Description |
 |---|---|---|
-| `GAIA_ADMIN_EMAIL` | `admin@localhost.com` | Email (and username) for the initial admin account. |
+| `GAIA_ADMIN_USERNAME` | `admin` | Public, immutable username for the initial admin account. |
+| `GAIA_ADMIN_EMAIL` | `admin@localhost.com` | Private sign-in email for the initial admin account. |
 | `GAIA_ADMIN_RESET` | *(empty)* | Set to `true` to reset the admin password on the next startup. **Remove after use.** |
 
 ---

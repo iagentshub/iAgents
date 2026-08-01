@@ -37,7 +37,8 @@ Las variables que controlan este comportamiento son:
 
 | Variable | Valor por defecto | Descripción |
 |---|---|---|
-| `GAIA_ADMIN_EMAIL` | `admin@localhost.com` | Email (y nombre de usuario) de la cuenta administrador inicial. |
+| `GAIA_ADMIN_USERNAME` | `admin` | Username público e inmutable de la cuenta administrador inicial. |
+| `GAIA_ADMIN_EMAIL` | `admin@localhost.com` | Email privado de acceso de la cuenta administrador inicial. |
 | `GAIA_ADMIN_RESET` | *(vacío)* | Pon `true` para resetear la contraseña del admin en el próximo arranque. **Quitar después del arranque.** |
 
 ---

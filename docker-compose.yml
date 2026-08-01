@@ -153,6 +153,7 @@ services:
       # ── Seguridad ────────────────────────────────────────────────────────────
       # Email del administrador inicial (se crea automáticamente si no existe ningún admin)
       GAIA_ADMIN_EMAIL: "admin@localhost.com"
+      GAIA_ADMIN_USERNAME: "admin"
       # Pon "true" para resetear la contraseña del admin en el próximo arranque (quitar después)
       GAIA_ADMIN_RESET: ""
       # open | closed | invite

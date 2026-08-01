@@ -468,6 +468,7 @@ def cmd_local_start() -> None:
         pass
 
     gaia_port = read_env_var(ENV_FILE, "GAIA_PORT", "8765")
+    admin_username = read_env_var(ENV_FILE, "GAIA_ADMIN_USERNAME", "admin")
     admin_email = read_env_var(ENV_FILE, "GAIA_ADMIN_EMAIL", "admin@localhost.com")
     admin_reset = read_env_var(ENV_FILE, "GAIA_ADMIN_RESET", "")
     agents_secret = read_env_var(ENV_FILE, "GAIA_AGENTS_SECRET", "")
@@ -502,6 +503,7 @@ def cmd_local_start() -> None:
             "GAIA_PORT": gaia_port,
             "GAIA_RELOAD": "true",
             "GAIA_REGISTRATION": registration,
+            "GAIA_ADMIN_USERNAME": admin_username,
             "GAIA_ADMIN_EMAIL": admin_email,
             "GAIA_ADMIN_RESET": admin_reset,
             "GAIA_AGENTS_SECRET": agents_secret,

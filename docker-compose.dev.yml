@@ -73,6 +73,7 @@ services:
       GAIA_FRONTEND_URL: "${GAIA_FRONTEND_URL:-http://localhost:8007}"
       GAIA_REGISTRATION: "open"
       GAIA_ADMIN_EMAIL: "admin@localhost.com"
+      GAIA_ADMIN_USERNAME: "admin"
       GAIA_ADMIN_RESET: ""
       # ── SMTP ─────────────────────────────────────────────────────────────────
       # Por defecto apunta a Mailpit (captura local, UI en http://localhost:8025).

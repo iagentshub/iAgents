@@ -140,10 +140,12 @@ install_docker() {
 
     if [ -t 0 ]; then
       read -rp "  Dominio público (ej: https://miapp.com) [http://localhost:8007]: " INPUT_URL
+      read -rp "  Usuario público del administrador [admin]: " INPUT_USERNAME
       read -rp "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
       read -rp "  Puerto del frontend [8007]: " INPUT_PORT
     fi
     FRONTEND_URL="${INPUT_URL:-http://localhost:8007}"
+    ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
     ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost.com}"
     PORT="${INPUT_PORT:-8007}"
 
@@ -162,6 +164,7 @@ GAIA_FRONTEND_URL=${FRONTEND_URL}
 # Secreto JWT — generado automáticamente, no lo cambies salvo que reinicies desde cero
 GAIA_AGENTS_SECRET=${AGENTS_SECRET}
 
+GAIA_ADMIN_USERNAME=${ADMIN_USERNAME}
 GAIA_ADMIN_EMAIL=${ADMIN_EMAIL}
 # Descomenta para resetear la contraseña del admin en el próximo arranque (quitar después)
 # GAIA_ADMIN_RESET=true
@@ -264,7 +267,8 @@ EOF
   fi
   echo -e "${BOLD}║${RESET}  URL         › ${CYAN}${GAIA_FRONTEND_URL:-http://localhost:${PORT:-8007}}${RESET}"
   echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}React${RESET}"
-  echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
+  echo -e "${BOLD}║${RESET}  Usuario     › ${CYAN}${GAIA_ADMIN_USERNAME:-admin}${RESET}"
+  echo -e "${BOLD}║${RESET}  Email       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
   if [ -n "${ADMIN_PASS:-}" ]; then
     echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
   else
@@ -461,9 +465,11 @@ install_local() {
     echo
 
     if [ -t 0 ]; then
+      read -rp "  Usuario público del administrador [admin]: " INPUT_USERNAME
       read -rp "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
       read -rp "  Puerto [8007]: " INPUT_PORT
     fi
+    ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
     ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost.com}"
     PORT="${INPUT_PORT:-8007}"
 
@@ -481,6 +487,7 @@ GAIA_FRONTEND_URL=http://localhost:${PORT}
 # Secreto JWT — generado automáticamente
 GAIA_AGENTS_SECRET=${SECRET}
 
+GAIA_ADMIN_USERNAME=${ADMIN_USERNAME}
 GAIA_ADMIN_EMAIL=${ADMIN_EMAIL}
 # Descomenta para resetear la contraseña del admin en el próximo arranque:
 # GAIA_ADMIN_RESET=true
@@ -539,7 +546,8 @@ EOF
   fi
   echo -e "${BOLD}║${RESET}  URL         › ${CYAN}http://localhost:${PORT:-8007}${RESET}"
   echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}React${RESET}"
-  echo -e "${BOLD}║${RESET}  Admin       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
+  echo -e "${BOLD}║${RESET}  Usuario     › ${CYAN}${GAIA_ADMIN_USERNAME:-admin}${RESET}"
+  echo -e "${BOLD}║${RESET}  Email       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
   if [ -n "${ADMIN_PASS}" ]; then
     echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
   else
