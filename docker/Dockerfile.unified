@@ -69,9 +69,12 @@ COPY flutter-web/ /usr/share/nginx/html/app/
 # nginx.conf → conf.d/default.conf. El `gzip on;` de fábrica de Debian en
 # nginx.conf (ver arriba) se elimina para que el de aquí no choque con un
 # "directive is duplicate" al arrancar nginx.
-# · Sustituir proxy_pass → 127.0.0.1 (backend en el mismo contenedor)
+# · La imagen standalone sustituye BACKEND_URL en runtime. En la imagen
+#   unificada el backend siempre vive en el mismo contenedor, por lo que se
+#   fija aquí y se valida la configuración durante el build.
 COPY frontend/nginx.react.conf /etc/nginx/conf.d/default.conf
-RUN sed -i 's|http://backend:8765|http://127.0.0.1:8765|g' /etc/nginx/conf.d/default.conf
+RUN sed -i 's|${BACKEND_URL}|http://127.0.0.1:8765|g' /etc/nginx/conf.d/default.conf \
+    && nginx -t
 
 # ── Supervisor ────────────────────────────────────────────────────────────────
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

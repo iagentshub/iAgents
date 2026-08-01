@@ -325,7 +325,10 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
         Write-Fail "No se pudo descargar $ImageRepository. Comprueba que el paquete GHCR sea publico."
     }
     # No se detiene la instalación hasta que la descarga haya terminado bien.
-    docker compose -f $ComposeFile up -d --remove-orphans
+    docker compose -f $ComposeFile up -d --remove-orphans --wait --wait-timeout 180
+    if ($LASTEXITCODE -ne 0) {
+        throw "Los contenedores no alcanzaron un estado saludable. Revisa: cd $InstallDir; docker compose logs --tail=200"
+    }
     'docker' | Out-File -FilePath $ModeFile -Encoding ascii
     $InstallComponent | Out-File -FilePath $ComponentFile -Encoding ascii
 

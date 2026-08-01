@@ -74,7 +74,7 @@ services:
       - iagentshub_data:/data
     healthcheck:
       test: ["CMD", "python3", "-c",
-             "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/health'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
+             "import http.client; c=http.client.HTTPConnection('localhost',80,timeout=5); c.request('GET','/api/health'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

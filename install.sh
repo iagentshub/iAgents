@@ -346,7 +346,8 @@ EOF
     || error "No se pudo descargar ${IMAGE_REPOSITORY}. Comprueba que el paquete GHCR sea público."
   # Solo se toca la instalación activa después de descargar correctamente. Así
   # un fallo del registro no provoca una caída del servicio existente.
-  docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
+  docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans --wait --wait-timeout 180 \
+    || error "Los contenedores no alcanzaron un estado saludable. Revisa: cd ${INSTALL_DIR} && docker compose logs --tail=200"
   printf 'docker\n' > "$MODE_FILE"
   printf '%s\n' "$INSTALL_COMPONENT" > "$COMPONENT_FILE"
 
