@@ -179,6 +179,18 @@ function Install-Docker {
         }
         $WatchtowerContainerName = "iagentshub-watchtower-$WatchtowerSuffix"
     }
+
+    # Token de la API HTTP de Watchtower (POST /v1/update) que usa
+    # /api/admin/update-now para forzar el ciclo de actualizacion ahora mismo.
+    # Se conserva entre ejecuciones igual que WatchtowerContainerName.
+    $WatchtowerHttpApiToken = $null
+    if (-not $FirstInstall) {
+        $WatchtowerHttpApiToken = ((Get-Content "$InstallDir\.env" |
+            Where-Object { $_ -match '^WATCHTOWER_HTTP_API_TOKEN=' } |
+            Select-Object -Last 1) -replace '^WATCHTOWER_HTTP_API_TOKEN=', '')
+    }
+    if (-not $WatchtowerHttpApiToken) { $WatchtowerHttpApiToken = New-RandomHex }
+
     if ($FirstInstall) { Write-Info "Primera instalacion en $InstallDir" }
     else { Write-Info "Actualizacion detectada en $InstallDir" }
 
@@ -286,6 +298,8 @@ IMAGE_TAG=latest
 # (ejecuta luego: docker compose stop watchtower).
 WATCHTOWER_INTERVAL=3600
 WATCHTOWER_CONTAINER_NAME=$WatchtowerContainerName
+# Token de la API HTTP de Watchtower -- no lo cambies salvo que reinicies desde cero
+WATCHTOWER_HTTP_API_TOKEN=$WatchtowerHttpApiToken
 
 GAIA_TRUSTED_PROXIES=127.0.0.1
 "@
@@ -300,6 +314,7 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
         $FoundComponent = $false
         $FoundApiBase = $false
         $FoundWatchtowerContainerName = $false
+        $FoundWatchtowerHttpApiToken = $false
         $ApiBase = if ($env:IAGENTSHUB_API_URL) { $env:IAGENTSHUB_API_URL } else {
             (($Lines | Where-Object { $_ -match '^API_BASE=' } | Select-Object -Last 1) -replace '^API_BASE=', '')
         }
@@ -325,6 +340,9 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
             } elseif ($_ -match '^WATCHTOWER_CONTAINER_NAME=') {
                 $FoundWatchtowerContainerName = $true
                 "WATCHTOWER_CONTAINER_NAME=$WatchtowerContainerName"
+            } elseif ($_ -match '^WATCHTOWER_HTTP_API_TOKEN=') {
+                $FoundWatchtowerHttpApiToken = $true
+                "WATCHTOWER_HTTP_API_TOKEN=$WatchtowerHttpApiToken"
             } else { $_ }
         }
         if (-not $FoundImageRepository) { $Lines += "IMAGE_REPOSITORY=$ImageRepository" }
@@ -332,6 +350,7 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
         if (-not $FoundComponent) { $Lines += "IAGENTSHUB_COMPONENT=$InstallComponent" }
         if (-not $FoundApiBase) { $Lines += "API_BASE=$ApiBase" }
         if (-not $FoundWatchtowerContainerName) { $Lines += "WATCHTOWER_CONTAINER_NAME=$WatchtowerContainerName" }
+        if (-not $FoundWatchtowerHttpApiToken) { $Lines += "WATCHTOWER_HTTP_API_TOKEN=$WatchtowerHttpApiToken" }
         $Lines | Out-File -FilePath $EnvPath -Encoding utf8
         Write-Info "Imagen GHCR estable configurada."
     }

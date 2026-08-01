@@ -210,6 +210,15 @@ install_docker() {
     WATCHTOWER_NAME="iagentshub-watchtower-${WATCHTOWER_SUFFIX}"
   fi
 
+  # Token de la API HTTP de Watchtower (POST /v1/update) que usa
+  # /api/admin/update-now para forzar el ciclo de actualización ahora mismo.
+  # Se conserva entre ejecuciones igual que WATCHTOWER_CONTAINER_NAME.
+  WATCHTOWER_HTTP_API_TOKEN=""
+  if [ -f .env ]; then
+    WATCHTOWER_HTTP_API_TOKEN="$(sed -n 's/^WATCHTOWER_HTTP_API_TOKEN=//p' .env | tail -1)"
+  fi
+  [ -z "$WATCHTOWER_HTTP_API_TOKEN" ] && WATCHTOWER_HTTP_API_TOKEN=$(_rand_hex)
+
   if $FIRST_INSTALL; then
     info "Primera instalación en ${INSTALL_DIR}"
   else
@@ -314,6 +323,8 @@ IMAGE_TAG=latest
 # (ejecuta luego: docker compose stop watchtower).
 WATCHTOWER_INTERVAL=3600
 WATCHTOWER_CONTAINER_NAME=${WATCHTOWER_NAME}
+# Token de la API HTTP de Watchtower — no lo cambies salvo que reinicies desde cero
+WATCHTOWER_HTTP_API_TOKEN=${WATCHTOWER_HTTP_API_TOKEN}
 
 GAIA_TRUSTED_PROXIES=127.0.0.1
 EOF
@@ -330,14 +341,16 @@ EOF
     fi
     awk -v image_repository="$IMAGE_REPOSITORY" \
         -v component="$INSTALL_COMPONENT" -v api_base="$API_BASE_VALUE" \
-        -v watchtower_name="$WATCHTOWER_NAME" '
-      BEGIN { repo=0; tag=0; component_seen=0; api_seen=0; watchtower_seen=0 }
+        -v watchtower_name="$WATCHTOWER_NAME" \
+        -v api_token="$WATCHTOWER_HTTP_API_TOKEN" '
+      BEGIN { repo=0; tag=0; component_seen=0; api_seen=0; watchtower_seen=0; token_seen=0 }
       /^DOCKER_HUB_USER=/ { next }
       /^IMAGE_REPOSITORY=/ { print "IMAGE_REPOSITORY=" image_repository; repo=1; next }
       /^IMAGE_TAG=/ { print; tag=1; next }
       /^IAGENTSHUB_COMPONENT=/ { print "IAGENTSHUB_COMPONENT=" component; component_seen=1; next }
       /^API_BASE=/ { print "API_BASE=" api_base; api_seen=1; next }
       /^WATCHTOWER_CONTAINER_NAME=/ { print "WATCHTOWER_CONTAINER_NAME=" watchtower_name; watchtower_seen=1; next }
+      /^WATCHTOWER_HTTP_API_TOKEN=/ { print "WATCHTOWER_HTTP_API_TOKEN=" api_token; token_seen=1; next }
       { print }
       END {
         if (!repo) print "IMAGE_REPOSITORY=" image_repository
@@ -345,6 +358,7 @@ EOF
         if (!component_seen) print "IAGENTSHUB_COMPONENT=" component
         if (!api_seen) print "API_BASE=" api_base
         if (!watchtower_seen) print "WATCHTOWER_CONTAINER_NAME=" watchtower_name
+        if (!token_seen) print "WATCHTOWER_HTTP_API_TOKEN=" api_token
       }
     ' .env > .env.tmp
     mv .env.tmp .env
