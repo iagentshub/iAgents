@@ -245,14 +245,17 @@ def inject_github_token(env: dict) -> None:
             env[key] = repo.replace("https://", f"https://{token}@", 1)
 
 
-def _show_admin_info(compose: list[str]) -> None:
+def _show_admin_info(compose: list[str], hub: bool = False) -> None:
+    # docker-compose.hub.yml (imagen unificada) llama al servicio "iagentshub";
+    # docker-compose.yml (backend+frontend separados) lo llama "backend".
+    service = "iagentshub" if hub else "backend"
     for _ in range(30):
-        if run_ok(compose + ["exec", "-T", "backend", "sh", "-c", "exit 0"]):
+        if run_ok(compose + ["exec", "-T", service, "sh", "-c", "exit 0"]):
             break
         time.sleep(1)
 
     admin_email = subprocess.run(
-        compose + ["exec", "-T", "backend", "sh", "-c", 'printf "%s" "$GAIA_ADMIN_EMAIL"'],
+        compose + ["exec", "-T", service, "sh", "-c", 'printf "%s" "$GAIA_ADMIN_EMAIL"'],
         capture_output=True,
         text=True,
         check=False,
@@ -261,7 +264,7 @@ def _show_admin_info(compose: list[str]) -> None:
         return
 
     admin_pass = subprocess.run(
-        compose + ["exec", "-T", "backend", "sh", "-c", 'cat "$GAIA_DATA_DIR/.admin_pass" 2>/dev/null'],
+        compose + ["exec", "-T", service, "sh", "-c", 'cat "$GAIA_DATA_DIR/.admin_pass" 2>/dev/null'],
         capture_output=True,
         text=True,
         check=False,
@@ -801,7 +804,7 @@ def cmd_start(compose: list[str], dev: bool, hub: bool) -> None:
         subprocess.run(compose + ["up", "-d", "--build"], env=env, check=True)
     print()
     success(f"iAgents Hub en marcha → http://localhost:{get_port()}")
-    _show_admin_info(compose)
+    _show_admin_info(compose, hub)
 
 
 def cmd_stop(compose: list[str]) -> None:
@@ -850,7 +853,7 @@ def cmd_update(compose: list[str], dev: bool, hub: bool) -> None:
         subprocess.run(compose + ["up", "-d", "--build"], env=env, check=True)
     print()
     success(f"Actualización completada → http://localhost:{get_port()}")
-    _show_admin_info(compose)
+    _show_admin_info(compose, hub)
 
 
 def cmd_status(compose: list[str]) -> None:
