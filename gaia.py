@@ -4,7 +4,7 @@
 Vive en la raíz de iAgents/ (junto a .env, data/, docker-compose*.yml) — se
 ejecuta como `python3 gaia.py <comando>`. local_proxy.py vive en scripts/.
 
-Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--frontend=<var>]
+Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--frontend=<var>] [--yes]
 
   start    Arranca los servicios
   stop     Detiene los servicios
@@ -12,12 +12,14 @@ Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--frontend=<var>]
   update   Actualiza a la última versión y reinicia  (solo Docker)
   status   Estado de los servicios
   push     Construye las imágenes Docker y las sube a Docker Hub  (solo --hub)
+  reset    Borra la base de datos y TODOS los datos, y reinstala desde cero
 
 Flags:
   --dev              Docker con repos locales (../backend_fastapi, ../frontend_vanilla) — hot reload
   --hub              Docker con imágenes pre-construidas de Docker Hub   — producción rápida
   --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)
   --frontend=<var>   Limita 'push' a una variante: vanilla|react (default: sube ambas)
+  --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)
 
 Un único script, sin dependencias externas (solo librería estándar), para no
 tener que mantener lógica duplicada entre bash (gaia.sh) y batch (gaia.bat).
@@ -78,6 +80,33 @@ def warn(msg: str) -> None:
 def error(msg: str) -> None:
     print(f"{RED}{BOLD}[gaia]{RESET} {msg}", file=sys.stderr)
     sys.exit(1)
+
+
+def _confirm_destructive(scope_desc: str, yes: bool) -> None:
+    """Exige confirmación explícita antes de un borrado irreversible.
+
+    El compose por defecto (sin --dev/--hub/--local) es el que usa el
+    despliegue en producción — un 'reset' accidental ahí destruye datos
+    reales, así que no basta con un simple aviso.
+    """
+    print()
+    warn("╔══════════════════════════════════════════════════════════════╗")
+    warn("║  ATENCIÓN: esta acción es DESTRUCTIVA e IRREVERSIBLE           ║")
+    warn("╚══════════════════════════════════════════════════════════════╝")
+    warn(f"Se eliminará POR COMPLETO {scope_desc}:")
+    warn("  • Todos los usuarios y contraseñas")
+    warn("  • Todos los agentes, skills, conexiones (con API keys cifradas) y workflows")
+    warn("  • Todo el historial de chats, memoria y contadores de tokens")
+    warn("  • La configuración (settings.json, secret JWT)")
+    print()
+    if yes:
+        warn("--yes indicado: continuando sin confirmación interactiva.")
+        return
+    if not sys.stdin.isatty():
+        error("Entrada no interactiva: repite el comando con --yes para confirmar el borrado.")
+    resp = input(f"{BOLD}Escribe RESET para confirmar: {RESET}").strip()
+    if resp != "RESET":
+        error("Confirmación no recibida. Abortando sin cambios.")
 
 
 # ── Rutas modo local ─────────────────────────────────────────────────────────
@@ -555,6 +584,16 @@ def cmd_local_status() -> None:
     print()
 
 
+def cmd_local_reset(frontend_arg: str | None, yes: bool) -> None:
+    _confirm_destructive("el directorio de datos local (../iagentshub/data/)", yes)
+    cmd_local_stop()
+    if DATA_DIR.exists():
+        shutil.rmtree(DATA_DIR)
+        info("Directorio de datos eliminado.")
+    success("Reinstalando desde cero...")
+    cmd_local_start(frontend_arg)
+
+
 def cmd_local_logs() -> None:
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
     BACKEND_LOG.touch(exist_ok=True)
@@ -819,6 +858,20 @@ def cmd_status(compose: list[str]) -> None:
     subprocess.run(compose + ["ps"], check=False)
 
 
+def cmd_reset(compose: list[str], dev: bool, hub: bool, yes: bool) -> None:
+    check_docker()
+    ensure_env()
+    _confirm_destructive(
+        "los volúmenes Docker (base de datos, código clonado por code-sync)", yes
+    )
+    env = os.environ.copy()
+    inject_github_token(env)
+    info("Eliminando contenedores y volúmenes...")
+    subprocess.run(compose + ["down", "-v"], env=env, check=True)
+    success("Volúmenes eliminados. Reinstalando desde cero...")
+    cmd_start(compose, dev, hub)
+
+
 # ── Ayuda ──────────────────────────────────────────────────────────────────────
 
 
@@ -830,6 +883,7 @@ def _print_local_usage() -> None:
     print("  restart  Detiene y vuelve a arrancar los servicios locales")
     print("  logs     Muestra los logs en tiempo real")
     print("  status   Estado de los procesos locales")
+    print("  reset    Borra ../iagentshub/data/ (BD y config) y reinstala desde cero")
     print()
     print(f"  {YELLOW}Base de datos: SQLite en ../iagentshub/data/hub.db  (con persistencia){RESET}")
     print(f"  {YELLOW}Sin PostgreSQL ni contenedores Docker.{RESET}")
@@ -847,12 +901,14 @@ def _print_docker_usage() -> None:
     print("  update   Actualiza a la última versión y reinicia")
     print("  status   Estado de los contenedores")
     print("  push     Construye imágenes y las sube a Docker Hub  (requiere --hub o sin flag)")
+    print("  reset    Borra la BD y TODOS los volúmenes, y reinstala desde cero (pide confirmación)")
     print()
     print(f"{BOLD}Flags:{RESET}")
     print("  --dev              Usa repos locales (../backend_fastapi, ../frontend_vanilla) con hot reload")
     print("  --hub              Usa imágenes pre-construidas de Docker Hub (despliegue rápido)")
     print("  --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)")
     print("  --frontend=<var>   Limita 'push' a una variante: vanilla|react (default: sube ambas)")
+    print("  --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)")
     print()
     print(f"{BOLD}Flujo recomendado para despliegues rápidos (--hub):{RESET}")
     print("  1. En tu máquina:   python3 gaia.py push              # construye y sube imágenes")
@@ -865,7 +921,7 @@ def _print_docker_usage() -> None:
 
 
 def main() -> None:
-    dev = local = hub = help_mode = False
+    dev = local = hub = help_mode = yes = False
     frontend_arg: str | None = None
     positional: list[str] = []
 
@@ -876,6 +932,8 @@ def main() -> None:
             local = True
         elif arg == "--hub":
             hub = True
+        elif arg == "--yes":
+            yes = True
         elif arg.startswith("--frontend="):
             frontend_arg = arg.split("=", 1)[1]
         elif arg in ("-h", "--help", "help"):
@@ -906,6 +964,8 @@ def main() -> None:
             cmd_local_logs()
         elif command == "status":
             cmd_local_status()
+        elif command == "reset":
+            cmd_local_reset(frontend_arg, yes)
         else:
             error(f"Comando desconocido: {command}. Usa: python3 gaia.py --help --local")
         return
@@ -937,6 +997,8 @@ def main() -> None:
         cmd_status(compose)
     elif command == "push":
         cmd_push(frontend_arg)
+    elif command == "reset":
+        cmd_reset(compose, dev, hub, yes)
     else:
         error(f"Comando desconocido: {command}. Usa: python3 gaia.py --help")
 

@@ -33,7 +33,7 @@ The main tables are:
 | `users` | Accounts, roles, password hash, GDPR tokens |
 | `conversations` / `messages` | Chat history |
 | `connections` | Provider credentials (API keys encrypted with AES) |
-| `resource_folders` / `resource_folder_items` / `knowledge_items` | Folders, knowledge documents and URLs |
+| `knowledge_items` | Knowledge documents and URLs |
 | `groups` / `group_members` / `group_invitations` | Team groups and memberships |
 | `resource_group_shares` | Resources shared with groups |
 | `accounts` | Linked external accounts (Google, etc.) |

@@ -33,7 +33,7 @@ Las tablas principales son:
 | `users` | Cuentas, roles, hash de contraseña, tokens GDPR |
 | `conversations` / `messages` | Historial de chats |
 | `connections` | Credenciales de proveedores (API keys cifradas con AES) |
-| `resource_folders` / `resource_folder_items` / `knowledge_items` | Carpetas, documentos y URLs de conocimiento |
+| `knowledge_items` | Documentos y URLs de conocimiento |
 | `groups` / `group_members` / `group_invitations` | Grupos compartidos y membresías |
 | `resource_group_shares` | Recursos compartidos con grupos |
 | `accounts` | Cuentas externas vinculadas (Google, etc.) |

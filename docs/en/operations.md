@@ -96,6 +96,7 @@ On Windows: `python gaia.py --help` (same file, same syntax).
 | `logs` | Shows live activity |
 | `status` | Current status of the services |
 | `push` | Builds the unified images (both variants by default) and pushes them to Docker Hub *(Docker only)* |
+| `reset` | Wipes the database and all data, and reinstalls from scratch *(asks for confirmation)* |
 
 ---
 
@@ -120,6 +121,21 @@ python3 gaia.py push --frontend=react     # limit the build/push to iagenthub/ap
 ```
 
 In production (CI), each frontend independently publishes its own variant of the unified image: `frontend_vanilla`'s workflow publishes `:vanilla` and `frontend_react`'s publishes `:latest`.
+
+---
+
+## Fresh install (`reset`)
+
+Completely wipes the database (users, agents, skills, encrypted connections, chats, memory) and reinstalls from scratch. This is **irreversible** — the script requires typing `RESET` to confirm, unless `--yes` is passed (useful for scripts, but use with care: it doesn't distinguish environments).
+
+```bash
+python3 gaia.py reset            # Docker: docker compose down -v + start (wipes all volumes)
+python3 gaia.py reset --dev      # same, in development mode
+python3 gaia.py reset --hub      # same, in Hub mode
+python3 gaia.py reset --local    # wipes ../iagentshub/data/ and reinstalls
+```
+
+> ⚠️ The default compose (no flags) is the one a typical production deployment uses. Running `reset` there wipes real data — double-check which server/directory you're in before confirming.
 
 ---
 

@@ -82,7 +82,12 @@ python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)
 python3 gaia.py push                      # construir y subir TODAS las imágenes (:latest + :vanilla)
 python3 gaia.py push --frontend=vanilla   # construir y subir solo :vanilla
 python3 gaia.py push --frontend=react     # construir y subir solo :latest
+
+python3 gaia.py reset                     # borra la BD y TODOS los volúmenes, reinstala desde cero
+python3 gaia.py reset --local             # borra ../iagentshub/data/ y reinstala desde cero
 ```
+
+> ⚠️ `reset` es **irreversible**: borra usuarios, agentes, skills, conexiones y todo el historial. Pide confirmación escrita (`RESET`) salvo que se pase `--yes`.
 
 ---
 
