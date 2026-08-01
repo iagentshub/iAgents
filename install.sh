@@ -340,12 +340,13 @@ EOF
     info "Descargando imagen desde GitHub Container Registry..."
   else
     info "Descargando imagen actualizada desde GitHub Container Registry..."
-    docker compose -f "${COMPOSE_FILE}" down --remove-orphans
   fi
 
   docker compose -f "${COMPOSE_FILE}" pull \
     || error "No se pudo descargar ${IMAGE_REPOSITORY}. Comprueba que el paquete GHCR sea público."
-  docker compose -f "${COMPOSE_FILE}" up -d
+  # Solo se toca la instalación activa después de descargar correctamente. Así
+  # un fallo del registro no provoca una caída del servicio existente.
+  docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
   printf 'docker\n' > "$MODE_FILE"
   printf '%s\n' "$INSTALL_COMPONENT" > "$COMPONENT_FILE"
 

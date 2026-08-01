@@ -317,7 +317,6 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
     Write-Host ""
     if (-not $FirstInstall) {
         Write-Info "Descargando imagenes actualizadas..."
-        docker compose -f $ComposeFile down --remove-orphans
     } else {
         Write-Info "Descargando imagen desde GitHub Container Registry..."
     }
@@ -325,7 +324,8 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "No se pudo descargar $ImageRepository. Comprueba que el paquete GHCR sea publico."
     }
-    docker compose -f $ComposeFile up -d
+    # No se detiene la instalación hasta que la descarga haya terminado bien.
+    docker compose -f $ComposeFile up -d --remove-orphans
     'docker' | Out-File -FilePath $ModeFile -Encoding ascii
     $InstallComponent | Out-File -FilePath $ComponentFile -Encoding ascii
 
