@@ -37,3 +37,16 @@ A partir de ese momento se ejecuta automáticamente en cada `git commit`.
 Cada vez que se sube código a la rama principal o se abre una pull request, GitHub ejecuta las mismas verificaciones en un entorno limpio. Esto actúa como red de seguridad para cambios que lleguen sin el hook local instalado.
 
 Un pull request no puede fusionarse si las verificaciones fallan.
+
+## Publicación de imágenes
+
+Los pushes a `main` generan imágenes multi-plataforma (`amd64` y `arm64`) y
+las publican en GitHub Container Registry. La imagen unificada es
+`ghcr.io/iagentshub/app:latest`; también se conserva un tag React inmutable por
+compilación. Los cambios en iAgents, backend, React o Flutter reconstruyen esa
+imagen desde el código actual de los cuatro repositorios.
+
+El paquete `iagentshub/app` debe configurarse como público en GitHub y conceder
+acceso de escritura de Actions a los cuatro repositorios para que los
+instaladores puedan descargarlo sin credenciales y todos los workflows puedan
+publicarlo.

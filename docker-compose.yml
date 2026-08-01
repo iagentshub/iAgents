@@ -209,7 +209,7 @@ services:
       options:
         max-size: "10m"
         max-file: "15"
-    image: "${GAIA_FRONTEND_IMAGE:-${DOCKER_HUB_USER:-iagenthub}/frontend}:${IMAGE_TAG:-latest}"
+    image: "${GAIA_FRONTEND_IMAGE:-ghcr.io/iagentshub/frontend}:${IMAGE_TAG:-latest}"
     environment:
       API_BASE: ""
       STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"

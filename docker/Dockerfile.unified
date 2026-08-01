@@ -30,10 +30,11 @@ FROM python:3.12-slim
 
 # Versión de build (formato YYYYMMDDHHMMSS, UTC) — la inyecta gaia.py push o
 # el workflow de CI vía --build-arg. "dev" en builds locales sin el arg.
-# Se usa en /api/admin/check-update para comparar contra Docker Hub.
+# Se usa en /api/admin/check-update para comparar contra GHCR.
 ARG GAIA_VERSION=dev
 ENV GAIA_VERSION=$GAIA_VERSION
 LABEL org.iagentshub.version=$GAIA_VERSION
+LABEL org.opencontainers.image.source="https://github.com/iagentshub/iAgents"
 
 # Commit (SHA corto) de backend_fastapi y del frontend empaquetados en esta
 # imagen — GAIA_VERSION solo dice "cuándo" se construyó, no "qué" código de

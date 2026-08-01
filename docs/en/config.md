@@ -56,7 +56,8 @@ The variables controlling this behaviour are:
 
 | Variable | Options | Description |
 |---|---|---|
-| `IMAGE_TAG` | `latest` / any React tag | Docker Hub mode only (`--hub`). Which unified React image version to pull. |
+| `IMAGE_REPOSITORY` | `ghcr.io/iagentshub/app` | Unified image repository in GitHub Container Registry. |
+| `IMAGE_TAG` | `latest` / any React tag | Hub mode only (`--hub`). Which unified React image version to pull. |
 
 ---
 

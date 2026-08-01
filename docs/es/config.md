@@ -56,7 +56,8 @@ Las variables que controlan este comportamiento son:
 
 | Variable | Opciones | Descripción |
 |---|---|---|
-| `IMAGE_TAG` | `latest` / cualquier tag React | Solo en modo Docker Hub (`--hub`). Qué versión de la imagen unificada React se descarga. |
+| `IMAGE_REPOSITORY` | `ghcr.io/iagentshub/app` | Repositorio de la imagen unificada en GitHub Container Registry. |
+| `IMAGE_TAG` | `latest` / cualquier tag React | Solo en modo Hub (`--hub`). Qué versión de la imagen unificada React se descarga. |
 
 ---
 

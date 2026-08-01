@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # install.sh — Instalación y actualización de iAgents Hub (Linux / macOS)
 #
-# Un único comando para instalar el frontend React en Docker o sin Docker.
+# Un único comando para instalar la plataforma completa (backend FastAPI y
+# frontend React) en Docker o sin Docker.
 #
 #   curl -fsSL https://raw.githubusercontent.com/iagentshub/iAgents/main/install.sh | bash
 #
 # Para saltarte los prompts (CI, scripts, reinstalación no interactiva):
 #   IAGENTSHUB_MODE=docker|local  bash install.sh
 #
-# Docker:     solo requiere Docker. No clona repositorios (usa imágenes de Docker Hub).
+# Docker:     solo requiere Docker. No clona repositorios (usa imágenes de GHCR).
 # Sin Docker: instala Python 3.11+, git y Node.js LTS mediante el
 #             gestor de paquetes nativo del sistema (apt/dnf/yum/pacman/zypper/Homebrew),
 #             clona los repos como hermanos y arranca con gaia.py --local (SQLite).
@@ -35,7 +36,7 @@ case "${1:-}" in
     cat <<EOF
 ${BOLD}Uso:${RESET} install.sh
 
-Instala o actualiza iAgents Hub con el frontend React. Pregunta interactivamente:
+Instala o actualiza iAgents Hub completo (backend y frontends). Pregunta interactivamente:
   1) Modo: Docker (recomendado) o sin Docker (Python/Node directos, SQLite)
 
 ${BOLD}Variables de entorno${RESET} (para saltarte los prompts):
@@ -47,7 +48,7 @@ ${BOLD}Ejemplos:${RESET}
   IAGENTSHUB_MODE=docker bash install.sh
 
 ${BOLD}Requisitos:${RESET}
-  Docker:     solo Docker (no clona repositorios, usa imágenes de Docker Hub).
+  Docker:     solo Docker (no clona repositorios, usa imágenes de GitHub Container Registry).
   Sin Docker: instala Python 3.11+, git y Node.js LTS mediante
               el gestor de paquetes nativo del sistema.
 EOF
@@ -90,10 +91,19 @@ step "Modo de instalación"
 echo "  1) Docker      — recomendado, aislado, incluye PostgreSQL opcional"
 echo "  2) Sin Docker  — Python + Node.js directos, SQLite"
 MODE_ANSWER=""
-if [ -t 0 ] && [ -z "${IAGENTSHUB_MODE:-}" ]; then
+MODE_FILE="${INSTALL_DIR}/.install-mode"
+DETECTED_MODE=""
+if [ -f "$MODE_FILE" ]; then
+  DETECTED_MODE="$(tr -d '[:space:]' < "$MODE_FILE")"
+elif [ -f "${INSTALL_DIR}/.env" ]; then
+  DETECTED_MODE="docker"
+elif [ -f "${INSTALL_DIR}/iAgents/.env" ]; then
+  DETECTED_MODE="local"
+fi
+if [ -t 0 ] && [ -z "${IAGENTSHUB_MODE:-}" ] && [ -z "$DETECTED_MODE" ]; then
   read -rp "  Elige [1-2] (default 1): " MODE_ANSWER
 fi
-INSTALL_MODE="${IAGENTSHUB_MODE:-}"
+INSTALL_MODE="${IAGENTSHUB_MODE:-$DETECTED_MODE}"
 if [ -z "$INSTALL_MODE" ]; then
   case "$MODE_ANSWER" in
     2) INSTALL_MODE="local" ;;
@@ -103,6 +113,9 @@ fi
 [ "$INSTALL_MODE" = "docker" ] || [ "$INSTALL_MODE" = "local" ] \
   || error "IAGENTSHUB_MODE debe ser 'docker' o 'local' (valor: ${INSTALL_MODE})"
 success "Modo: ${INSTALL_MODE}$([ "$INSTALL_MODE" = docker ] && echo ' (Docker)' || echo ' (sin Docker)')"
+if [ -n "$DETECTED_MODE" ] && [ -z "${IAGENTSHUB_MODE:-}" ]; then
+  info "Modo de la instalación existente detectado automáticamente."
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Rama Docker
@@ -197,8 +210,8 @@ STRIPE_SECRET_KEY=
 STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
 
-# ── Docker Hub ────────────────────────────────────────────────────────────────
-DOCKER_HUB_USER=iagenthub
+# ── Imagen publicada desde GitHub Actions ─────────────────────────────────────
+IMAGE_REPOSITORY=ghcr.io/iagentshub/app
 # Imagen React estable
 IMAGE_TAG=latest
 
@@ -213,25 +226,32 @@ EOF
     success ".env creado."
   else
     warn ".env existente conservado. Edita ${INSTALL_DIR}/.env para cambiar la configuración."
-    if grep -q '^IMAGE_TAG=' .env; then
-      awk 'BEGIN { done=0 } /^IMAGE_TAG=/ { print "IMAGE_TAG=latest"; done=1; next } { print } END { if (!done) print "IMAGE_TAG=latest" }' .env > .env.tmp
-      mv .env.tmp .env
-    else
-      echo 'IMAGE_TAG=latest' >> .env
-    fi
-    info "IMAGE_TAG=latest aplicado para usar React."
+    awk '
+      BEGIN { repo=0; tag=0 }
+      /^DOCKER_HUB_USER=/ { next }
+      /^IMAGE_REPOSITORY=/ { print "IMAGE_REPOSITORY=ghcr.io/iagentshub/app"; repo=1; next }
+      /^IMAGE_TAG=/ { print; tag=1; next }
+      { print }
+      END {
+        if (!repo) print "IMAGE_REPOSITORY=ghcr.io/iagentshub/app"
+        if (!tag) print "IMAGE_TAG=latest"
+      }
+    ' .env > .env.tmp
+    mv .env.tmp .env
+    info "Imagen GHCR estable configurada."
   fi
 
   echo
   if $FIRST_INSTALL; then
-    info "Descargando imágenes de Docker Hub..."
+    info "Descargando imagen desde GitHub Container Registry..."
   else
-    info "Descargando imágenes actualizadas de Docker Hub..."
+    info "Descargando imagen actualizada desde GitHub Container Registry..."
     docker compose -f "${COMPOSE_FILE}" down
   fi
 
   docker compose -f "${COMPOSE_FILE}" pull
   docker compose -f "${COMPOSE_FILE}" up -d
+  printf 'docker\n' > "$MODE_FILE"
 
   info "Esperando que el backend arranque..."
   MAX=40
@@ -520,6 +540,7 @@ EOF
   step "Arrancando iAgents Hub"
   cd "${INSTALL_DIR}/iAgents"
   "$PYTHON" gaia.py start --local
+  printf 'local\n' > "$MODE_FILE"
 
   # ── Resumen ───────────────────────────────────────────────────────────────
   # shellcheck disable=SC1090

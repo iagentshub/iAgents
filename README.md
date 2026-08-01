@@ -16,8 +16,9 @@
 
 ## Instalación / Install
 
-Una única URL por sistema operativo. El instalador usa el frontend React y
-pregunta qué **modo** quieres (Docker o sin Docker):
+Una única URL por sistema operativo. El instalador despliega la plataforma
+completa (backend FastAPI y frontend React) y pregunta qué **modo**
+quieres (Docker o sin Docker):
 
 | | Plataforma | Comando |
 |---|---|---|
@@ -33,7 +34,7 @@ irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
 El script:
-1. Pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite).
+1. En una instalación nueva pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite). En las actualizaciones detecta y conserva automáticamente el modo instalado.
 2. Instala lo que falte (Docker no instala nada más; sin Docker instala Python 3.11+, git y Node.js mediante el gestor de paquetes nativo).
 3. Arranca la aplicación React y muestra la URL, el email de admin y la contraseña generada.
 
@@ -43,7 +44,7 @@ Para saltarte los prompts (reinstalación no interactiva / CI):
 IAGENTSHUB_MODE=docker bash install.sh
 ```
 
-> **Docker Hub:** [`iagenthub/app:latest`](https://hub.docker.com/r/iagenthub/app)
+> **Imagen Docker:** `ghcr.io/iagentshub/app:latest`, generada automáticamente por GitHub Actions.
 
 Una vez instalado:
 
@@ -74,7 +75,7 @@ git clone https://github.com/iagentshub/iAgents.git
 cd iagentshub/iAgents
 cp .env.example .env          # edita GAIA_AGENTS_SECRET y GAIA_FRONTEND_URL
 python3 gaia.py start               # Docker, imágenes locales
-python3 gaia.py start --hub         # Docker, imágenes de Docker Hub
+python3 gaia.py start --hub         # Docker, imagen de GitHub Container Registry
 python3 gaia.py start --dev         # Docker, hot reload con código local
 python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)
 

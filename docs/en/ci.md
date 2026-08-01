@@ -37,3 +37,15 @@ From that point on it runs automatically on every `git commit`.
 Every time code is pushed to the main branch or a pull request is opened, GitHub runs the same checks in a clean environment. This acts as a safety net for changes that arrive without the local hook installed.
 
 A pull request cannot be merged if the checks fail.
+
+## Image publishing
+
+Pushes to `main` build multi-platform images (`amd64` and `arm64`) and publish
+them to GitHub Container Registry. The unified image is
+`ghcr.io/iagentshub/app:latest`; each build also retains an immutable React tag.
+Changes to iAgents, the backend, React, or Flutter rebuild that image from the
+current code in all four repositories.
+
+The `iagentshub/app` package must be public in GitHub and grant Actions write
+access to all four repositories so installers can pull it without credentials
+and every workflow can publish it.

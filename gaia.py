@@ -11,12 +11,12 @@ Uso: python3 gaia.py <comando> [--dev] [--hub] [--local] [--yes]
   logs     Muestra los logs en tiempo real
   update   Actualiza a la última versión y reinicia  (solo Docker)
   status   Estado de los servicios
-  push     Construye las imágenes Docker y las sube a Docker Hub  (solo --hub)
+  push     Construye las imágenes Docker y las sube a GHCR  (solo --hub)
   reset    Borra la base de datos y TODOS los datos, y reinstala desde cero
 
 Flags:
   --dev              Docker con repos locales (../backend_fastapi, ../frontend_react) — hot reload
-  --hub              Docker con imágenes pre-construidas de Docker Hub   — producción rápida
+  --hub              Docker con imágenes pre-construidas en GHCR   — producción rápida
   --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)
   --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)
 
@@ -674,8 +674,8 @@ def _git_short_sha(repo: Path) -> str:
     return result.stdout.strip() or "dev"
 
 
-def _push_react(hub_user: str, tag: str) -> str:
-    unified_img = f"{hub_user}/app:{tag}"
+def _push_react(image_repository: str, tag: str) -> str:
+    unified_img = f"{image_repository}:{tag}"
     backend_src = Path(os.environ.get("DEV_BACKEND_REPO") or (REPOS_ROOT / "backend_fastapi")).resolve()
     frontend_src = Path(os.environ.get("DEV_FRONTEND_REPO") or (REPOS_ROOT / "frontend_react")).resolve()
     flutter_src = Path(os.environ.get("DEV_FLUTTER_REPO") or (REPOS_ROOT / "app_flutter")).resolve()
@@ -685,7 +685,7 @@ def _push_react(hub_user: str, tag: str) -> str:
     # adicional con el prefijo react- para que /api/admin/check-update pueda
     # comparar únicamente versiones de la aplicación web soportada.
     version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    version_img = f"{hub_user}/app:react-{version}"
+    version_img = f"{image_repository}:react-{version}"
     backend_commit = _git_short_sha(backend_src)
     frontend_commit = _git_short_sha(frontend_src)
 
@@ -742,14 +742,16 @@ def cmd_push() -> None:
     check_docker()
     ensure_env()
 
-    hub_user = read_env_var(ENV_FILE, "DOCKER_HUB_USER", "iagenthub")
+    image_repository = read_env_var(
+        ENV_FILE, "IMAGE_REPOSITORY", "ghcr.io/iagentshub/app"
+    )
     _ensure_buildx_builder()
 
     tag = read_env_var(ENV_FILE, "IMAGE_TAG", "") or "latest"
-    pushed = [_push_react(hub_user, tag)]
+    pushed = [_push_react(image_repository, tag)]
 
     print()
-    success("Imágenes publicadas en Docker Hub:")
+    success("Imágenes publicadas en GitHub Container Registry:")
     for img in pushed:
         success(f"  • {img}")
     info("Para desplegar: python3 gaia.py start --hub  (en cualquier servidor con Docker)")
@@ -764,7 +766,7 @@ def cmd_start(compose: list[str], dev: bool, hub: bool) -> None:
     if dev:
         info("Modo desarrollo — usando repos locales")
     if hub:
-        info("Modo Hub — usando imágenes de Docker Hub")
+        info("Modo Hub — usando imágenes de GitHub Container Registry")
         info("Descargando imágenes actualizadas...")
         subprocess.run(compose + ["pull"], env=env, check=True)
     info("Construyendo e iniciando servicios...")
@@ -813,7 +815,7 @@ def cmd_update(compose: list[str], dev: bool, hub: bool) -> None:
     if dev:
         info("Modo desarrollo — usando repos locales")
     if hub:
-        info("Modo Hub — descargando imágenes actualizadas de Docker Hub")
+        info("Modo Hub — descargando imágenes actualizadas de GitHub Container Registry")
     info("Actualizando a la última versión...")
     subprocess.run(
         compose + ["rm", "-f", "data-init"],
@@ -880,12 +882,12 @@ def _print_docker_usage() -> None:
     print("  logs     Muestra los logs en tiempo real")
     print("  update   Actualiza a la última versión y reinicia")
     print("  status   Estado de los contenedores")
-    print("  push     Construye imágenes y las sube a Docker Hub  (requiere --hub o sin flag)")
+    print("  push     Construye imágenes y las sube a GHCR  (requiere --hub o sin flag)")
     print("  reset    Borra la BD y TODOS los volúmenes, y reinstala desde cero (pide confirmación)")
     print()
     print(f"{BOLD}Flags:{RESET}")
     print("  --dev              Usa repos locales (../backend_fastapi, ../frontend_react) con hot reload")
-    print("  --hub              Usa imágenes pre-construidas de Docker Hub (despliegue rápido)")
+    print("  --hub              Usa imágenes pre-construidas de GHCR (despliegue rápido)")
     print("  --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)")
     print("  --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)")
     print()

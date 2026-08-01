@@ -13,9 +13,13 @@ Installation is a single script per OS (`install.sh` / `install.ps1`) and day-to
 
 ## One-command installation
 
-One URL per operating system. The script installs React and asks for the
-**mode**: Docker (recommended, includes optional PostgreSQL) or without Docker
-(Python/Node directly, SQLite).
+One URL per operating system. The script installs the full platform (FastAPI
+backend plus React frontend) and asks for the **mode**: Docker
+(recommended, includes optional PostgreSQL) or without Docker (Python/Node
+directly, SQLite).
+
+The same command installs and updates. After the first installation, the
+installer records the selected mode and reuses it automatically.
 
 ### 🐳🐧🍎 Linux / macOS
 
@@ -94,7 +98,7 @@ On Windows: `python gaia.py --help` (same file, same syntax).
 | `update` | Downloads the latest version and restarts *(Docker only)* |
 | `logs` | Shows live activity |
 | `status` | Current status of the services |
-| `push` | Builds the unified React image and pushes it to Docker Hub *(Docker only)* |
+| `push` | Builds the unified React image and pushes it to GitHub Container Registry *(Docker only)* |
 | `reset` | Wipes the database and all data, and reinstalls from scratch *(asks for confirmation)* |
 
 ---
@@ -105,7 +109,7 @@ On Windows: `python gaia.py --help` (same file, same syntax).
 
 **Development mode** (`--dev`) — uses the developer's local repositories (`../backend_fastapi` and `../frontend_react`) instead of downloading from GitHub. Allows iterating without pushing every change.
 
-**Hub mode** (`--hub`) — uses the pre-built unified React image from Docker Hub (backend + frontend in a single container). The tag is controlled by `IMAGE_TAG` in `.env`.
+**Hub mode** (`--hub`) — uses the pre-built unified React image from GitHub Container Registry (backend + frontend in a single container). The tag is controlled by `IMAGE_TAG` in `.env`.
 
 **Local mode** (`--local`) — no Docker: uvicorn plus a Python proxy serve the React app (SQLite). `gaia.py` runs `npm run build` when `dist/` is missing or dependencies change, then serves the static output.
 
@@ -114,7 +118,7 @@ On Windows: `python gaia.py --help` (same file, same syntax).
 ## Publishing the unified images (`push`)
 
 ```bash
-python3 gaia.py push  # build and push iagenthub/app:latest
+python3 gaia.py push  # build and push ghcr.io/iagentshub/app:latest
 ```
 
 In production, CI publishes the unified React image with `:latest` and an immutable version tag.

@@ -13,9 +13,13 @@ La instalación se hace con un único script por SO (`install.sh` / `install.ps1
 
 ## Instalación de un solo comando
 
-Una única URL por sistema operativo. El script instala React y pregunta por el
-**modo**: Docker (recomendado, incluye PostgreSQL opcional) o sin Docker
-(Python/Node directos, SQLite).
+Una única URL por sistema operativo. El script instala la plataforma completa
+(backend FastAPI y frontend React) y pregunta por el **modo**: Docker
+(recomendado, incluye PostgreSQL opcional) o sin Docker (Python/Node directos,
+SQLite).
+
+El mismo comando sirve para instalar y actualizar. Tras la primera instalación,
+el instalador guarda la modalidad elegida y la reutiliza automáticamente.
 
 ### 🐳🐧🍎 Linux / macOS
 
@@ -94,7 +98,7 @@ En Windows: `python gaia.py --help` (mismo fichero, misma sintaxis).
 | `update` | Descarga la última versión y reinicia *(solo Docker)* |
 | `logs` | Muestra la actividad en tiempo real |
 | `status` | Estado actual de los servicios |
-| `push` | Construye la imagen unificada React y la sube a Docker Hub *(solo Docker)* |
+| `push` | Construye la imagen unificada React y la sube a GitHub Container Registry *(solo Docker)* |
 | `reset` | Borra la base de datos y todos los datos, y reinstala desde cero *(pide confirmación)* |
 
 ---
@@ -105,7 +109,7 @@ En Windows: `python gaia.py --help` (mismo fichero, misma sintaxis).
 
 **Modo desarrollo** (`--dev`) — usa los repositorios locales del desarrollador (`../backend_fastapi` y `../frontend_react`) en lugar de descargar desde GitHub. Permite iterar sin hacer push de cada cambio.
 
-**Modo Hub** (`--hub`) — usa la imagen unificada React pre-construida de Docker Hub (backend + frontend en un único contenedor). El tag se controla con `IMAGE_TAG` en `.env`.
+**Modo Hub** (`--hub`) — usa la imagen unificada React pre-construida de GitHub Container Registry (backend + frontend en un único contenedor). El tag se controla con `IMAGE_TAG` en `.env`.
 
 **Modo local** (`--local`) — sin Docker: uvicorn + un proxy Python sirven la app React (SQLite). `gaia.py` ejecuta `npm run build` cuando falta `dist/` o cambian las dependencias y sirve ese resultado como estático.
 
@@ -114,7 +118,7 @@ En Windows: `python gaia.py --help` (mismo fichero, misma sintaxis).
 ## Publicar las imágenes unificadas (`push`)
 
 ```bash
-python3 gaia.py push  # construye y sube iagenthub/app:latest
+python3 gaia.py push  # construye y sube ghcr.io/iagentshub/app:latest
 ```
 
 En producción, CI publica la imagen unificada React con el tag `:latest` y un tag de versión inmutable.

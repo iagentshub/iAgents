@@ -1,6 +1,7 @@
 # install.ps1 — Instalación y actualización de iAgents Hub (Windows)
 #
-# Un único comando para instalar el frontend React en Docker o sin Docker.
+# Un único comando para instalar la plataforma completa (backend FastAPI y
+# frontend React) en Docker o sin Docker.
 #
 #   irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 #
@@ -8,7 +9,7 @@
 #   $env:IAGENTSHUB_MODE     = "docker"    # o "local"
 #   irm .../install.ps1 | iex
 #
-# Docker:     requiere Docker Desktop. No clona repositorios (usa imágenes de Docker Hub).
+# Docker:     requiere Docker Desktop. No clona repositorios (usa imágenes de GHCR).
 # Sin Docker: instala Python 3.11+, git y Node.js LTS vía winget,
 #             clona los repos como hermanos y arranca con gaia.py --local (SQLite).
 
@@ -28,7 +29,7 @@ if (($args -contains '-h') -or ($args -contains '--help') -or ($args -contains '
     Write-Host @"
 Uso: install.ps1
 
-Instala o actualiza iAgents Hub con el frontend React. Pregunta interactivamente:
+Instala o actualiza iAgents Hub completo (backend y frontends). Pregunta interactivamente:
   1) Modo: Docker (recomendado) o sin Docker (Python/Node directos, SQLite)
 
 Variables de entorno (para saltarte los prompts):
@@ -40,7 +41,7 @@ Ejemplos:
   `$env:IAGENTSHUB_MODE = "docker"; irm .../install.ps1 | iex
 
 Requisitos:
-  Docker:     requiere Docker Desktop (no clona repositorios, usa imagenes de Docker Hub).
+  Docker:     requiere Docker Desktop (usa imagenes de GitHub Container Registry).
   Sin Docker: instala Python 3.11+, git y Node.js LTS vía winget.
 "@
     exit 0
@@ -69,7 +70,16 @@ Write-Host ""
 Write-Step "Modo de instalacion"
 Write-Host "  1) Docker      - recomendado, aislado, incluye PostgreSQL opcional"
 Write-Host "  2) Sin Docker  - Python + Node.js directos, SQLite"
-$InstallMode = $env:IAGENTSHUB_MODE
+$ModeFile = "$InstallDir\.install-mode"
+$DetectedMode = $null
+if (Test-Path $ModeFile) {
+    $DetectedMode = (Get-Content $ModeFile -Raw).Trim()
+} elseif (Test-Path "$InstallDir\.env") {
+    $DetectedMode = "docker"
+} elseif (Test-Path "$InstallDir\iAgents\.env") {
+    $DetectedMode = "local"
+}
+$InstallMode = if ($env:IAGENTSHUB_MODE) { $env:IAGENTSHUB_MODE } else { $DetectedMode }
 if (-not $InstallMode) {
     $ans = Read-Host "  Elige [1-2] (default 1)"
     $InstallMode = if ($ans -eq "2") { "local" } else { "docker" }
@@ -78,6 +88,9 @@ if ($InstallMode -notin @("docker", "local")) {
     Write-Fail "IAGENTSHUB_MODE debe ser 'docker' o 'local' (valor: $InstallMode)"
 }
 Write-Success "Modo: $InstallMode"
+if ($DetectedMode -and -not $env:IAGENTSHUB_MODE) {
+    Write-Info "Modo de la instalacion existente detectado automaticamente."
+}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Rama Docker
@@ -162,8 +175,8 @@ STRIPE_SECRET_KEY=
 STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
 
-# -- Docker Hub --
-DOCKER_HUB_USER=iagenthub
+# -- Imagen publicada desde GitHub Actions --
+IMAGE_REPOSITORY=ghcr.io/iagentshub/app
 # Imagen React estable
 IMAGE_TAG=latest
 
@@ -181,15 +194,22 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
         $EnvPath = "$InstallDir\.env"
         $Lines = @(Get-Content $EnvPath)
         $FoundImageTag = $false
+        $FoundImageRepository = $false
         $Lines = $Lines | ForEach-Object {
-            if ($_ -match '^IMAGE_TAG=') {
+            if ($_ -match '^DOCKER_HUB_USER=') {
+                # Variable obsoleta: no se conserva al migrar a GHCR.
+            } elseif ($_ -match '^IMAGE_REPOSITORY=') {
+                $FoundImageRepository = $true
+                'IMAGE_REPOSITORY=ghcr.io/iagentshub/app'
+            } elseif ($_ -match '^IMAGE_TAG=') {
                 $FoundImageTag = $true
-                'IMAGE_TAG=latest'
+                $_
             } else { $_ }
         }
+        if (-not $FoundImageRepository) { $Lines += 'IMAGE_REPOSITORY=ghcr.io/iagentshub/app' }
         if (-not $FoundImageTag) { $Lines += 'IMAGE_TAG=latest' }
         $Lines | Out-File -FilePath $EnvPath -Encoding utf8
-        Write-Info "IMAGE_TAG=latest aplicado para usar React."
+        Write-Info "Imagen GHCR estable configurada."
     }
 
     Write-Host ""
@@ -197,10 +217,11 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
         Write-Info "Descargando imagenes actualizadas..."
         docker compose -f $ComposeFile down
     } else {
-        Write-Info "Descargando imagenes de Docker Hub..."
+        Write-Info "Descargando imagen desde GitHub Container Registry..."
     }
     docker compose -f $ComposeFile pull
     docker compose -f $ComposeFile up -d
+    'docker' | Out-File -FilePath $ModeFile -Encoding ascii
 
     Write-Info "Esperando que el backend arranque..."
     $AdminPass = ""
@@ -393,6 +414,7 @@ DATABASE_URL=
     Write-Step "Arrancando iAgents Hub"
     Set-Location "$InstallDir\iAgents"
     & $PythonExe gaia.py start --local
+    'local' | Out-File -FilePath $ModeFile -Encoding ascii
 
     # ── Resumen ──────────────────────────────────────────────────────────────
     $AdminPassFile = "$InstallDir\iAgents\data\.admin_pass"

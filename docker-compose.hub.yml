@@ -7,7 +7,7 @@
 #
 # Actualización automática: el servicio "watchtower" de abajo comprueba cada
 # WATCHTOWER_INTERVAL segundos (default 3600 = 1h) si hay una imagen nueva en
-# Docker Hub para el tag configurado y, si la hay, la descarga y reinicia el
+# GitHub Container Registry para el tag configurado y, si la hay, la descarga y reinicia el
 # contenedor "iagentshub" solo (usa una label para no tocar ningún otro
 # contenedor Docker que corra en el mismo host).
 #
@@ -25,7 +25,7 @@
 services:
 
   iagentshub:
-    image: ${DOCKER_HUB_USER:-iagenthub}/app:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REPOSITORY:-ghcr.io/iagentshub/app}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
@@ -60,9 +60,9 @@ services:
       STRIPE_PUBLISHABLE_KEY:    "${STRIPE_PUBLISHABLE_KEY:-}"
       STRIPE_WEBHOOK_SECRET:     "${STRIPE_WEBHOOK_SECRET:-}"
       API_BASE:                  ""
-      # Usados por /api/admin/check-update para saber qué repositorio de
-      # Docker Hub consultar (coincide con la imagen que se está corriendo).
-      DOCKER_HUB_USER:           "${DOCKER_HUB_USER:-iagenthub}"
+      # Usados por /api/admin/check-update para consultar las etiquetas
+      # publicadas por GitHub Actions en GHCR.
+      IMAGE_REPOSITORY:          "${IMAGE_REPOSITORY:-ghcr.io/iagentshub/app}"
       IMAGE_TAG:                 "${IMAGE_TAG:-latest}"
       # Usados por /api/admin/auto-update para arrancar/parar "watchtower" a
       # través de docker-proxy (ver más abajo). DOCKER_PROXY_URL vacío = la
