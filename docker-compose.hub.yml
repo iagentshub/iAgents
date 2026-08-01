@@ -69,7 +69,7 @@ services:
       # instalación no tiene el proxy (instalaciones previas a esta versión
       # de docker-compose.hub.yml) → el endpoint responde con un error claro.
       DOCKER_PROXY_URL:          "http://docker-proxy:2375"
-      WATCHTOWER_CONTAINER_NAME: "watchtower"
+      WATCHTOWER_CONTAINER_NAME: "${WATCHTOWER_CONTAINER_NAME:-iagentshub-watchtower}"
     volumes:
       - iagentshub_data:/data
     healthcheck:
@@ -90,12 +90,13 @@ services:
   # versión de API de Docker demasiado antigua y entra en crash-loop contra
   # daemons recientes) — se usa el fork activo nickfedor/watchtower.
   #
-  # container_name fijo: así el backend (vía docker-proxy) siempre puede
-  # arrancarlo/pararlo por un nombre estable, sin necesitar listar
+  # El instalador genera un nombre estable y único por directorio para que
+  # varias instalaciones no colisionen en el mismo daemon. El backend recibe
+  # exactamente el mismo nombre y puede arrancarlo/pararlo sin listar
   # contenedores (que docker-proxy no permite — ver más abajo).
   watchtower:
     image: nickfedor/watchtower
-    container_name: watchtower
+    container_name: "${WATCHTOWER_CONTAINER_NAME:-iagentshub-watchtower}"
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -163,6 +163,22 @@ function Install-Docker {
     $ComposeFile = "$InstallDir\docker-compose.yml"
 
     $FirstInstall = -not (Test-Path "$InstallDir\.env")
+    $WatchtowerContainerName = $null
+    if (-not $FirstInstall) {
+        $WatchtowerContainerName = ((Get-Content "$InstallDir\.env" |
+            Where-Object { $_ -match '^WATCHTOWER_CONTAINER_NAME=' } |
+            Select-Object -Last 1) -replace '^WATCHTOWER_CONTAINER_NAME=', '')
+    }
+    if (-not $WatchtowerContainerName -or $WatchtowerContainerName -eq 'watchtower') {
+        $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $HashBytes = $Sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($InstallDir))
+            $WatchtowerSuffix = ([System.BitConverter]::ToString($HashBytes) -replace '-', '').Substring(0, 12).ToLowerInvariant()
+        } finally {
+            $Sha256.Dispose()
+        }
+        $WatchtowerContainerName = "iagentshub-watchtower-$WatchtowerSuffix"
+    }
     if ($FirstInstall) { Write-Info "Primera instalacion en $InstallDir" }
     else { Write-Info "Actualizacion detectada en $InstallDir" }
 
@@ -269,6 +285,7 @@ IMAGE_TAG=latest
 # Segundos entre comprobaciones de Watchtower (default 3600 = 1h). 0 la desactiva
 # (ejecuta luego: docker compose stop watchtower).
 WATCHTOWER_INTERVAL=3600
+WATCHTOWER_CONTAINER_NAME=$WatchtowerContainerName
 
 GAIA_TRUSTED_PROXIES=127.0.0.1
 "@
@@ -282,6 +299,7 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
         $FoundImageRepository = $false
         $FoundComponent = $false
         $FoundApiBase = $false
+        $FoundWatchtowerContainerName = $false
         $ApiBase = if ($env:IAGENTSHUB_API_URL) { $env:IAGENTSHUB_API_URL } else {
             (($Lines | Where-Object { $_ -match '^API_BASE=' } | Select-Object -Last 1) -replace '^API_BASE=', '')
         }
@@ -304,12 +322,16 @@ GAIA_TRUSTED_PROXIES=127.0.0.1
             } elseif ($_ -match '^API_BASE=') {
                 $FoundApiBase = $true
                 "API_BASE=$ApiBase"
+            } elseif ($_ -match '^WATCHTOWER_CONTAINER_NAME=') {
+                $FoundWatchtowerContainerName = $true
+                "WATCHTOWER_CONTAINER_NAME=$WatchtowerContainerName"
             } else { $_ }
         }
         if (-not $FoundImageRepository) { $Lines += "IMAGE_REPOSITORY=$ImageRepository" }
         if (-not $FoundImageTag) { $Lines += 'IMAGE_TAG=latest' }
         if (-not $FoundComponent) { $Lines += "IAGENTSHUB_COMPONENT=$InstallComponent" }
         if (-not $FoundApiBase) { $Lines += "API_BASE=$ApiBase" }
+        if (-not $FoundWatchtowerContainerName) { $Lines += "WATCHTOWER_CONTAINER_NAME=$WatchtowerContainerName" }
         $Lines | Out-File -FilePath $EnvPath -Encoding utf8
         Write-Info "Imagen GHCR estable configurada."
     }

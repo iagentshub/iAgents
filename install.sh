@@ -198,6 +198,18 @@ install_docker() {
   FIRST_INSTALL=true
   [ -f .env ] && FIRST_INSTALL=false
 
+  # container_name es global en cada daemon Docker. Derivar un nombre estable
+  # del directorio evita colisiones entre desarrollo, producción y otras
+  # instalaciones sin tocar contenedores ajenos.
+  WATCHTOWER_NAME=""
+  if [ -f .env ]; then
+    WATCHTOWER_NAME="$(sed -n 's/^WATCHTOWER_CONTAINER_NAME=//p' .env | tail -1)"
+  fi
+  if [ -z "$WATCHTOWER_NAME" ] || [ "$WATCHTOWER_NAME" = "watchtower" ]; then
+    WATCHTOWER_SUFFIX="$(printf '%s' "$INSTALL_DIR" | cksum | awk '{print $1}')"
+    WATCHTOWER_NAME="iagentshub-watchtower-${WATCHTOWER_SUFFIX}"
+  fi
+
   if $FIRST_INSTALL; then
     info "Primera instalación en ${INSTALL_DIR}"
   else
@@ -301,6 +313,7 @@ IMAGE_TAG=latest
 # Segundos entre comprobaciones de Watchtower (default 3600 = 1h). 0 la desactiva
 # (ejecuta luego: docker compose stop watchtower).
 WATCHTOWER_INTERVAL=3600
+WATCHTOWER_CONTAINER_NAME=${WATCHTOWER_NAME}
 
 GAIA_TRUSTED_PROXIES=127.0.0.1
 EOF
@@ -316,19 +329,22 @@ EOF
       [ -n "$API_BASE_VALUE" ] || error "El frontend aislado requiere la URL del backend."
     fi
     awk -v image_repository="$IMAGE_REPOSITORY" \
-        -v component="$INSTALL_COMPONENT" -v api_base="$API_BASE_VALUE" '
-      BEGIN { repo=0; tag=0; component_seen=0; api_seen=0 }
+        -v component="$INSTALL_COMPONENT" -v api_base="$API_BASE_VALUE" \
+        -v watchtower_name="$WATCHTOWER_NAME" '
+      BEGIN { repo=0; tag=0; component_seen=0; api_seen=0; watchtower_seen=0 }
       /^DOCKER_HUB_USER=/ { next }
       /^IMAGE_REPOSITORY=/ { print "IMAGE_REPOSITORY=" image_repository; repo=1; next }
       /^IMAGE_TAG=/ { print; tag=1; next }
       /^IAGENTSHUB_COMPONENT=/ { print "IAGENTSHUB_COMPONENT=" component; component_seen=1; next }
       /^API_BASE=/ { print "API_BASE=" api_base; api_seen=1; next }
+      /^WATCHTOWER_CONTAINER_NAME=/ { print "WATCHTOWER_CONTAINER_NAME=" watchtower_name; watchtower_seen=1; next }
       { print }
       END {
         if (!repo) print "IMAGE_REPOSITORY=" image_repository
         if (!tag) print "IMAGE_TAG=latest"
         if (!component_seen) print "IAGENTSHUB_COMPONENT=" component
         if (!api_seen) print "API_BASE=" api_base
+        if (!watchtower_seen) print "WATCHTOWER_CONTAINER_NAME=" watchtower_name
       }
     ' .env > .env.tmp
     mv .env.tmp .env

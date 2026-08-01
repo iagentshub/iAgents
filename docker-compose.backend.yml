@@ -44,7 +44,7 @@ services:
       IMAGE_VARIANT:             "fastapi"
       IMAGE_TAG:                 "${IMAGE_TAG:-latest}"
       DOCKER_PROXY_URL:          "http://docker-proxy:2375"
-      WATCHTOWER_CONTAINER_NAME: "watchtower"
+      WATCHTOWER_CONTAINER_NAME: "${WATCHTOWER_CONTAINER_NAME:-iagentshub-watchtower}"
     volumes:
       - iagentshub_data:/data
     healthcheck:
@@ -56,7 +56,7 @@ services:
 
   watchtower:
     image: nickfedor/watchtower
-    container_name: watchtower
+    container_name: "${WATCHTOWER_CONTAINER_NAME:-iagentshub-watchtower}"
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
