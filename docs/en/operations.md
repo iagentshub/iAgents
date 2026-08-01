@@ -19,7 +19,10 @@ backend plus React frontend) and asks for the **mode**: Docker
 directly, SQLite).
 
 The same command installs and updates. After the first installation, the
-installer records the selected mode and reuses it automatically.
+installer records both the selected mode and components and reuses them
+automatically. It can install the full application, the backend only, or the
+frontend only. A frontend-only installation asks for the remote backend URL
+and keeps `/api` on the same origin through a reverse proxy.
 
 ### 🐳🐧🍎 Linux / macOS
 
@@ -50,9 +53,13 @@ powershell -File install.ps1 --help
 
 ```bash
 IAGENTSHUB_MODE=docker bash install.sh
+IAGENTSHUB_MODE=local IAGENTSHUB_COMPONENT=backend bash install.sh
+IAGENTSHUB_MODE=docker IAGENTSHUB_COMPONENT=frontend \
+  IAGENTSHUB_API_URL=https://api.example.com bash install.sh
 ```
 ```powershell
 $env:IAGENTSHUB_MODE = "docker"
+$env:IAGENTSHUB_COMPONENT = "backend"
 irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 

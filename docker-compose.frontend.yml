@@ -1,0 +1,31 @@
+# iAgents Hub — frontend standalone desde GitHub Container Registry.
+# API_BASE debe apuntar a un backend iAgents Hub accesible por el navegador.
+
+services:
+  iagentshub:
+    image: ${IMAGE_REPOSITORY:-ghcr.io/iagentshub/frontend}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    ports:
+      - "${PORT:-8007}:80"
+    environment:
+      API_BASE: ""
+      BACKEND_URL: "${API_BASE:?Define API_BASE con la URL pública del backend}"
+      STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"
+
+  watchtower:
+    image: nickfedor/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_INTERVAL:-3600}"

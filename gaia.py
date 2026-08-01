@@ -426,21 +426,38 @@ def _port_in_use(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def _local_show_info(port: str, gaia_port: str, admin_email: str) -> None:
+def _local_component() -> str:
+    component = read_env_var(ENV_FILE, "IAGENTSHUB_COMPONENT", "full")
+    if component not in {"full", "backend", "frontend"}:
+        error("IAGENTSHUB_COMPONENT debe ser full, backend o frontend.")
+    return component
+
+
+def _local_show_info(
+    component: str,
+    port: str,
+    gaia_port: str,
+    admin_email: str,
+    backend_url: str,
+) -> None:
     print()
     print(f"{BOLD}  ╔══════════════════════════════════════════╗{RESET}")
     print(f"{BOLD}  ║       Modo local (sin Docker)            ║{RESET}")
     print(f"{BOLD}  ╠══════════════════════════════════════════╣{RESET}")
-    print(f"{BOLD}  ║{RESET}  Frontend   › {CYAN}http://localhost:{port}{RESET}")
-    print(f"{BOLD}  ║{RESET}  Backend    › {CYAN}http://localhost:{gaia_port}{RESET}")
-    print(f"{BOLD}  ║{RESET}  Admin      › {CYAN}{admin_email}{RESET}")
-    admin_pass_file = DATA_DIR / ".admin_pass"
-    if admin_pass_file.is_file():
-        admin_pass = admin_pass_file.read_text().strip()
-        print(f"{BOLD}  ║{RESET}  Contraseña › {GREEN}{admin_pass}{RESET}")
-    else:
-        print(f"{BOLD}  ║{RESET}  Contraseña › (ver logs: python3 gaia.py logs --local)")
-    print(f"{BOLD}  ║{RESET}  Base datos › {YELLOW}SQLite — ../iagentshub/data/hub.db{RESET}")
+    if component in {"full", "frontend"}:
+        print(f"{BOLD}  ║{RESET}  Frontend   › {CYAN}http://localhost:{port}{RESET}")
+    if component in {"full", "backend"}:
+        print(f"{BOLD}  ║{RESET}  Backend    › {CYAN}http://localhost:{gaia_port}{RESET}")
+        print(f"{BOLD}  ║{RESET}  Admin      › {CYAN}{admin_email}{RESET}")
+        admin_pass_file = DATA_DIR / ".admin_pass"
+        if admin_pass_file.is_file():
+            admin_pass = admin_pass_file.read_text().strip()
+            print(f"{BOLD}  ║{RESET}  Contraseña › {GREEN}{admin_pass}{RESET}")
+        else:
+            print(f"{BOLD}  ║{RESET}  Contraseña › (ver logs: python3 gaia.py logs --local)")
+        print(f"{BOLD}  ║{RESET}  Base datos › {YELLOW}SQLite — ../iagentshub/data/hub.db{RESET}")
+    elif backend_url:
+        print(f"{BOLD}  ║{RESET}  API remota › {CYAN}{backend_url}{RESET}")
     print(f"{BOLD}  ╚══════════════════════════════════════════╝{RESET}")
     print()
 
@@ -449,14 +466,20 @@ def _local_show_info(port: str, gaia_port: str, admin_email: str) -> None:
 
 
 def cmd_local_start() -> None:
-    if _is_running(BACKEND_PID_FILE) or _is_running(FRONTEND_PID_FILE):
+    component = _local_component()
+    wants_backend = component in {"full", "backend"}
+    wants_frontend = component in {"full", "frontend"}
+    if (wants_backend and _is_running(BACKEND_PID_FILE)) or (
+        wants_frontend and _is_running(FRONTEND_PID_FILE)
+    ):
         warn("Los servicios locales ya están en ejecución.")
         cmd_local_status()
         sys.exit(0)
 
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
-    ensure_venv()
-    init_local_data()
+    if wants_backend:
+        ensure_venv()
+        init_local_data()
 
     port = read_env_var(ENV_FILE, "PORT", "8007")
     try:
@@ -474,18 +497,22 @@ def cmd_local_start() -> None:
     agents_secret = read_env_var(ENV_FILE, "GAIA_AGENTS_SECRET", "")
     registration = read_env_var(ENV_FILE, "GAIA_REGISTRATION", "open")
     cors_origins = read_env_var(ENV_FILE, "GAIA_CORS_ORIGINS", f"http://localhost:{port}")
-    ensure_frontend_build()
+    backend_url = read_env_var(ENV_FILE, "API_BASE", "").rstrip("/")
+    if component == "frontend" and not backend_url:
+        error("API_BASE debe indicar la URL del backend para arrancar solo el frontend.")
+    if wants_frontend:
+        ensure_frontend_build()
     frontend_dir = (REPOS_ROOT / "frontend_react" / "dist").resolve()
 
     # ── Comprobación previa de puertos ────────────────────────────────────
     port_conflict = False
-    if _port_in_use(int(port)):
+    if wants_frontend and _port_in_use(int(port)):
         warn(f"El puerto {port} ya está en uso por otro proceso.")
         warn("El frontend local NO arrancará en ese puerto. Opciones:")
         warn("  • Cambia PORT a otro valor en .env  (p.ej. PORT=8008)")
         warn("  • Detén el proceso que ocupa el puerto y vuelve a ejecutar este comando")
         port_conflict = True
-    if _port_in_use(int(gaia_port)):
+    if wants_backend and _port_in_use(int(gaia_port)):
         warn(f"El puerto {gaia_port} ya está en uso por otro proceso.")
         warn("El backend local NO puede arrancar. Opciones:")
         warn("  • Cambia GAIA_PORT en .env")
@@ -493,47 +520,55 @@ def cmd_local_start() -> None:
         error(f"Puerto del backend ({gaia_port}) ocupado. Abortando.")
 
     # ── Backend ────────────────────────────────────────────────────────────
-    info(f"Arrancando backend en puerto {gaia_port} ...")
-    backend_dir = (REPOS_ROOT / "backend_fastapi").resolve()
-    backend_env = os.environ.copy()
-    backend_env.update(
-        {
-            "GAIA_DATA_DIR": str(DATA_DIR),
-            "GAIA_HOST": "127.0.0.1",
-            "GAIA_PORT": gaia_port,
-            "GAIA_RELOAD": "true",
-            "GAIA_REGISTRATION": registration,
-            "GAIA_ADMIN_USERNAME": admin_username,
-            "GAIA_ADMIN_EMAIL": admin_email,
-            "GAIA_ADMIN_RESET": admin_reset,
-            "GAIA_AGENTS_SECRET": agents_secret,
-            "GAIA_CORS_ORIGINS": cors_origins,
-            "GAIA_EMAIL_VERIFY": "false",
-            "GAIA_SMTP_HOST": "",
-            "DATABASE_URL": "",
-        }
-    )
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if IS_WINDOWS else 0
-    with open(BACKEND_LOG, "ab") as log_fh:
-        backend_proc = subprocess.Popen(
-            [str(venv_python()), "main.py"],
-            cwd=str(backend_dir),
-            env=backend_env,
-            stdout=log_fh,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
+    if wants_backend:
+        info(f"Arrancando backend en puerto {gaia_port} ...")
+        backend_dir = (REPOS_ROOT / "backend_fastapi").resolve()
+        backend_env = os.environ.copy()
+        backend_env.update(
+            {
+                "GAIA_DATA_DIR": str(DATA_DIR),
+                "GAIA_HOST": "0.0.0.0" if component == "backend" else "127.0.0.1",
+                "GAIA_PORT": gaia_port,
+                "GAIA_RELOAD": "true",
+                "GAIA_REGISTRATION": registration,
+                "GAIA_ADMIN_USERNAME": admin_username,
+                "GAIA_ADMIN_EMAIL": admin_email,
+                "GAIA_ADMIN_RESET": admin_reset,
+                "GAIA_AGENTS_SECRET": agents_secret,
+                "GAIA_CORS_ORIGINS": cors_origins,
+                "GAIA_EMAIL_VERIFY": "false",
+                "GAIA_SMTP_HOST": "",
+                "DATABASE_URL": "",
+            }
         )
-    BACKEND_PID_FILE.write_text(str(backend_proc.pid))
+        with open(BACKEND_LOG, "ab") as log_fh:
+            backend_proc = subprocess.Popen(
+                [str(venv_python()), "main.py"],
+                cwd=str(backend_dir),
+                env=backend_env,
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                creationflags=creationflags,
+            )
+        BACKEND_PID_FILE.write_text(str(backend_proc.pid))
 
     # ── Frontend proxy ────────────────────────────────────────────────────
-    if not port_conflict:
+    if wants_frontend and not port_conflict:
         info(f"Arrancando frontend React en puerto {port} ...")
         frontend_env = os.environ.copy()
-        frontend_env.update({"PORT": port, "GAIA_PORT": gaia_port, "FRONTEND_DIR": str(frontend_dir)})
+        frontend_env.update(
+            {
+                "PORT": port,
+                "GAIA_PORT": gaia_port,
+                "BACKEND_URL": backend_url,
+                "FRONTEND_DIR": str(frontend_dir),
+            }
+        )
         with open(FRONTEND_LOG, "ab") as log_fh:
             frontend_proc = subprocess.Popen(
-                [str(venv_python()), str(SCRIPT_DIR / "scripts" / "local_proxy.py")],
+                [sys.executable, str(SCRIPT_DIR / "scripts" / "local_proxy.py")],
                 env=frontend_env,
                 stdout=log_fh,
                 stderr=subprocess.STDOUT,
@@ -548,7 +583,7 @@ def cmd_local_start() -> None:
             warn(f"  {FRONTEND_LOG}")
 
     success("Servicios locales arrancados.")
-    _local_show_info(port, gaia_port, admin_email)
+    _local_show_info(component, port, gaia_port, admin_email, backend_url)
     if port_conflict:
         warn(f"ATENCIÓN: el frontend usa el puerto {port} ocupado por otro proceso.")
         warn(f"Accede directamente al backend › http://localhost:{gaia_port}")
@@ -590,9 +625,11 @@ def cmd_local_status() -> None:
 
 
 def cmd_local_reset(yes: bool) -> None:
-    _confirm_destructive("el directorio de datos local (../iagentshub/data/)", yes)
+    component = _local_component()
+    if component in {"full", "backend"}:
+        _confirm_destructive("el directorio de datos local (../iagentshub/data/)", yes)
     cmd_local_stop()
-    if DATA_DIR.exists():
+    if component in {"full", "backend"} and DATA_DIR.exists():
         shutil.rmtree(DATA_DIR)
         info("Directorio de datos eliminado.")
     success("Reinstalando desde cero...")

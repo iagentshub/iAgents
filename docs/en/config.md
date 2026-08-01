@@ -56,6 +56,8 @@ The variables controlling this behaviour are:
 
 | Variable | Options | Description |
 |---|---|---|
+| `IAGENTSHUB_COMPONENT` | `full` / `backend` / `frontend` | Deployed components. The installer preserves this choice. |
+| `API_BASE` | HTTP(S) URL | Remote backend used by a frontend-only installation. |
 | `IMAGE_REPOSITORY` | `ghcr.io/iagentshub/app` | Unified image repository in GitHub Container Registry. |
 | `IMAGE_TAG` | `latest` / any React tag | Hub mode only (`--hub`). Which unified React image version to pull. |
 

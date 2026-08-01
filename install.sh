@@ -41,6 +41,9 @@ Instala o actualiza iAgents Hub completo (backend y frontends). Pregunta interac
 
 ${BOLD}Variables de entorno${RESET} (para saltarte los prompts):
   IAGENTSHUB_MODE=docker|local        Modo de instalación
+  IAGENTSHUB_COMPONENT=full|backend|frontend
+                                      Componentes que se instalarán
+  IAGENTSHUB_API_URL=<url>            Backend remoto para frontend aislado
   IAGENTSHUB_DIR=<ruta>               Directorio de instalación (default: \$HOME/iagentshub)
 
 ${BOLD}Ejemplos:${RESET}
@@ -69,7 +72,6 @@ REPO_URL="https://github.com/iagentshub/iAgents.git"
 BACKEND_REPO_URL="https://github.com/iagentshub/backend_fastapi.git"
 FRONTEND_REACT_URL="https://github.com/iagentshub/frontend_react.git"
 GITHUB_RAW="https://raw.githubusercontent.com/iagentshub/iAgents/main"
-COMPOSE_URL="${GITHUB_RAW}/docker-compose.hub.yml"
 INSTALL_DIR="${IAGENTSHUB_DIR:-$HOME/iagentshub}"
 MIN_PYTHON="3.11"
 
@@ -78,6 +80,21 @@ _rand_hex() {
   LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64 \
     || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
     || date +%s%N | sha256sum | head -c 64
+}
+
+CAN_PROMPT=false
+if { [ -t 0 ] || [ -t 1 ]; } && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+  CAN_PROMPT=true
+fi
+
+_prompt() {
+  local message="$1" variable="$2"
+  if $CAN_PROMPT; then
+    local answer=""
+    printf '%s' "$message" >/dev/tty
+    IFS= read -r answer </dev/tty
+    printf -v "$variable" '%s' "$answer"
+  fi
 }
 
 echo
@@ -100,8 +117,52 @@ elif [ -f "${INSTALL_DIR}/.env" ]; then
 elif [ -f "${INSTALL_DIR}/iAgents/.env" ]; then
   DETECTED_MODE="local"
 fi
-if [ -t 0 ] && [ -z "${IAGENTSHUB_MODE:-}" ] && [ -z "$DETECTED_MODE" ]; then
-  read -rp "  Elige [1-2] (default 1): " MODE_ANSWER
+if [ -z "${IAGENTSHUB_MODE:-}" ] && [ -z "$DETECTED_MODE" ]; then
+  _prompt "  Elige [1-2] (default 1): " MODE_ANSWER
+fi
+
+# ── Componentes ──────────────────────────────────────────────────────────────
+step "Componentes"
+echo "  1) Aplicación completa — backend + frontend"
+echo "  2) Solo backend"
+echo "  3) Solo frontend    — requiere la URL de un backend"
+COMPONENT_ANSWER=""
+COMPONENT_FILE="${INSTALL_DIR}/.install-component"
+DETECTED_COMPONENT=""
+if [ -f "$COMPONENT_FILE" ]; then
+  DETECTED_COMPONENT="$(tr -d '[:space:]' < "$COMPONENT_FILE")"
+elif [ -n "$DETECTED_MODE" ]; then
+  DETECTED_COMPONENT="full"
+fi
+if [ -z "${IAGENTSHUB_COMPONENT:-}" ] && [ -z "$DETECTED_COMPONENT" ]; then
+  _prompt "  Elige [1-3] (default 1): " COMPONENT_ANSWER
+fi
+INSTALL_COMPONENT="${IAGENTSHUB_COMPONENT:-$DETECTED_COMPONENT}"
+if [ -z "$INSTALL_COMPONENT" ]; then
+  case "$COMPONENT_ANSWER" in
+    2) INSTALL_COMPONENT="backend" ;;
+    3) INSTALL_COMPONENT="frontend" ;;
+    *) INSTALL_COMPONENT="full" ;;
+  esac
+fi
+case "$INSTALL_COMPONENT" in
+  full)
+    COMPOSE_URL="${GITHUB_RAW}/docker-compose.hub.yml"
+    IMAGE_REPOSITORY="ghcr.io/iagentshub/app"
+    ;;
+  backend)
+    COMPOSE_URL="${GITHUB_RAW}/docker-compose.backend.yml"
+    IMAGE_REPOSITORY="ghcr.io/iagentshub/backend"
+    ;;
+  frontend)
+    COMPOSE_URL="${GITHUB_RAW}/docker-compose.frontend.yml"
+    IMAGE_REPOSITORY="ghcr.io/iagentshub/frontend"
+    ;;
+  *) error "IAGENTSHUB_COMPONENT debe ser full, backend o frontend (valor: ${INSTALL_COMPONENT})" ;;
+esac
+success "Componentes: ${INSTALL_COMPONENT}"
+if [ -n "$DETECTED_COMPONENT" ] && [ -z "${IAGENTSHUB_COMPONENT:-}" ]; then
+  info "Componentes de la instalación existente detectados automáticamente."
 fi
 INSTALL_MODE="${IAGENTSHUB_MODE:-$DETECTED_MODE}"
 if [ -z "$INSTALL_MODE" ]; then
@@ -151,16 +212,33 @@ install_docker() {
     step "Configurando variables de entorno"
     echo
 
-    if [ -t 0 ]; then
-      read -rp "  Dominio público (ej: https://miapp.com) [http://localhost:8007]: " INPUT_URL
-      read -rp "  Usuario público del administrador [admin]: " INPUT_USERNAME
-      read -rp "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
-      read -rp "  Puerto del frontend [8007]: " INPUT_PORT
+    INPUT_URL=""; INPUT_USERNAME=""; INPUT_EMAIL=""; INPUT_PORT=""; INPUT_API_URL=""
+    case "$INSTALL_COMPONENT" in
+      full)
+        _prompt "  Dominio público [http://localhost:8007]: " INPUT_URL
+        _prompt "  Puerto del frontend [8007]: " INPUT_PORT
+        ;;
+      backend)
+        _prompt "  URL del frontend autorizado [http://localhost:8007]: " INPUT_URL
+        _prompt "  Puerto público del backend [8765]: " INPUT_PORT
+        ;;
+      frontend)
+        _prompt "  URL pública del backend (ej: https://api.midominio.com): " INPUT_API_URL
+        _prompt "  Puerto del frontend [8007]: " INPUT_PORT
+        ;;
+    esac
+    if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+      _prompt "  Usuario público del administrador [admin]: " INPUT_USERNAME
+      _prompt "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
     fi
+    PORT="${INPUT_PORT:-$([ "$INSTALL_COMPONENT" = backend ] && echo 8765 || echo 8007)}"
     FRONTEND_URL="${INPUT_URL:-http://localhost:8007}"
+    API_BASE_VALUE="${IAGENTSHUB_API_URL:-${INPUT_API_URL:-}}"
+    if [ "$INSTALL_COMPONENT" = "frontend" ] && [ -z "$API_BASE_VALUE" ]; then
+      error "El frontend aislado requiere IAGENTSHUB_API_URL o indicar la URL del backend."
+    fi
     ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
     ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost.com}"
-    PORT="${INPUT_PORT:-8007}"
 
     AGENTS_SECRET=$(_rand_hex)
     DB_PASSWORD=$(_rand_hex)
@@ -170,9 +248,13 @@ install_docker() {
 # Para cambiar la configuración edita este fichero y ejecuta:
 #   cd ${INSTALL_DIR} && docker compose up -d
 
-PORT=${PORT}
+IAGENTSHUB_COMPONENT=${INSTALL_COMPONENT}
+PORT=$([ "$INSTALL_COMPONENT" = backend ] && echo 8007 || echo "$PORT")
+BACKEND_PORT=$([ "$INSTALL_COMPONENT" = backend ] && echo "$PORT" || echo 8765)
 GAIA_PORT=8765
 GAIA_FRONTEND_URL=${FRONTEND_URL}
+GAIA_CORS_ORIGINS=${FRONTEND_URL}
+API_BASE=${API_BASE_VALUE}
 
 # Secreto JWT — generado automáticamente, no lo cambies salvo que reinicies desde cero
 GAIA_AGENTS_SECRET=${AGENTS_SECRET}
@@ -211,7 +293,7 @@ STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
 
 # ── Imagen publicada desde GitHub Actions ─────────────────────────────────────
-IMAGE_REPOSITORY=ghcr.io/iagentshub/app
+IMAGE_REPOSITORY=${IMAGE_REPOSITORY}
 # Imagen React estable
 IMAGE_TAG=latest
 
@@ -226,15 +308,27 @@ EOF
     success ".env creado."
   else
     warn ".env existente conservado. Edita ${INSTALL_DIR}/.env para cambiar la configuración."
-    awk '
-      BEGIN { repo=0; tag=0 }
+    API_BASE_VALUE="${IAGENTSHUB_API_URL:-$(sed -n 's/^API_BASE=//p' .env | tail -1)}"
+    if [ "$INSTALL_COMPONENT" = "frontend" ] && [ -z "$API_BASE_VALUE" ]; then
+      INPUT_API_URL=""
+      _prompt "  URL pública del backend (ej: https://api.midominio.com): " INPUT_API_URL
+      API_BASE_VALUE="$INPUT_API_URL"
+      [ -n "$API_BASE_VALUE" ] || error "El frontend aislado requiere la URL del backend."
+    fi
+    awk -v image_repository="$IMAGE_REPOSITORY" \
+        -v component="$INSTALL_COMPONENT" -v api_base="$API_BASE_VALUE" '
+      BEGIN { repo=0; tag=0; component_seen=0; api_seen=0 }
       /^DOCKER_HUB_USER=/ { next }
-      /^IMAGE_REPOSITORY=/ { print "IMAGE_REPOSITORY=ghcr.io/iagentshub/app"; repo=1; next }
+      /^IMAGE_REPOSITORY=/ { print "IMAGE_REPOSITORY=" image_repository; repo=1; next }
       /^IMAGE_TAG=/ { print; tag=1; next }
+      /^IAGENTSHUB_COMPONENT=/ { print "IAGENTSHUB_COMPONENT=" component; component_seen=1; next }
+      /^API_BASE=/ { print "API_BASE=" api_base; api_seen=1; next }
       { print }
       END {
-        if (!repo) print "IMAGE_REPOSITORY=ghcr.io/iagentshub/app"
+        if (!repo) print "IMAGE_REPOSITORY=" image_repository
         if (!tag) print "IMAGE_TAG=latest"
+        if (!component_seen) print "IAGENTSHUB_COMPONENT=" component
+        if (!api_seen) print "API_BASE=" api_base
       }
     ' .env > .env.tmp
     mv .env.tmp .env
@@ -246,31 +340,35 @@ EOF
     info "Descargando imagen desde GitHub Container Registry..."
   else
     info "Descargando imagen actualizada desde GitHub Container Registry..."
-    docker compose -f "${COMPOSE_FILE}" down
+    docker compose -f "${COMPOSE_FILE}" down --remove-orphans
   fi
 
-  docker compose -f "${COMPOSE_FILE}" pull
+  docker compose -f "${COMPOSE_FILE}" pull \
+    || error "No se pudo descargar ${IMAGE_REPOSITORY}. Comprueba que el paquete GHCR sea público."
   docker compose -f "${COMPOSE_FILE}" up -d
   printf 'docker\n' > "$MODE_FILE"
+  printf '%s\n' "$INSTALL_COMPONENT" > "$COMPONENT_FILE"
 
-  info "Esperando que el backend arranque..."
-  MAX=40
-  I=0
-  while true; do
-    if docker compose -f "${COMPOSE_FILE}" exec -T iagentshub \
-        sh -c 'test -f /data/.admin_pass' </dev/null &>/dev/null; then
-      break
-    fi
-    I=$((I+1))
-    if [ "$I" -ge "$MAX" ]; then
-      warn "Timeout esperando .admin_pass (el backend puede tardar más en arrancar)"
-      break
-    fi
-    sleep 3
-  done
-
-  ADMIN_PASS=$(docker compose -f "${COMPOSE_FILE}" exec -T iagentshub \
-    sh -c 'cat /data/.admin_pass' </dev/null 2>/dev/null | tr -d '\r\n' || true)
+  ADMIN_PASS=""
+  if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+    info "Esperando que el backend arranque..."
+    MAX=40
+    I=0
+    while true; do
+      if docker compose -f "${COMPOSE_FILE}" exec -T iagentshub \
+          sh -c 'test -f /data/.admin_pass' </dev/null &>/dev/null; then
+        break
+      fi
+      I=$((I+1))
+      if [ "$I" -ge "$MAX" ]; then
+        warn "Timeout esperando .admin_pass (el backend puede tardar más en arrancar)"
+        break
+      fi
+      sleep 3
+    done
+    ADMIN_PASS=$(docker compose -f "${COMPOSE_FILE}" exec -T iagentshub \
+      sh -c 'cat /data/.admin_pass' </dev/null 2>/dev/null | tr -d '\r\n' || true)
+  fi
 
   # shellcheck disable=SC1091
   source "${INSTALL_DIR}/.env" 2>/dev/null || true
@@ -285,14 +383,27 @@ EOF
     echo -e "${BOLD}║       Actualización completada ✓         ║${RESET}"
     echo -e "${BOLD}╠══════════════════════════════════════════╣${RESET}"
   fi
-  echo -e "${BOLD}║${RESET}  URL         › ${CYAN}${GAIA_FRONTEND_URL:-http://localhost:${PORT:-8007}}${RESET}"
-  echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}React${RESET}"
-  echo -e "${BOLD}║${RESET}  Usuario     › ${CYAN}${GAIA_ADMIN_USERNAME:-admin}${RESET}"
-  echo -e "${BOLD}║${RESET}  Email       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
-  if [ -n "${ADMIN_PASS:-}" ]; then
-    echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
+  echo -e "${BOLD}║${RESET}  Componentes › ${CYAN}${INSTALL_COMPONENT}${RESET}"
+  if [ "$INSTALL_COMPONENT" != "backend" ]; then
+    if [ "$INSTALL_COMPONENT" = "full" ]; then
+      echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}${GAIA_FRONTEND_URL:-http://localhost:${PORT:-8007}}${RESET}"
+    else
+      echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}http://localhost:${PORT:-8007}${RESET}"
+    fi
+  fi
+  if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+    if [ "$INSTALL_COMPONENT" = "backend" ]; then
+      echo -e "${BOLD}║${RESET}  Backend     › ${CYAN}http://localhost:${BACKEND_PORT:-8765}${RESET}"
+    fi
+    echo -e "${BOLD}║${RESET}  Usuario     › ${CYAN}${GAIA_ADMIN_USERNAME:-admin}${RESET}"
+    echo -e "${BOLD}║${RESET}  Email       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
+    if [ -n "${ADMIN_PASS:-}" ]; then
+      echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
+    else
+      echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ver: docker logs iagentshub-iagentshub-1 | grep -i pass${RESET}"
+    fi
   else
-    echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ver: docker logs iagentshub-iagentshub-1 | grep -i pass${RESET}"
+    echo -e "${BOLD}║${RESET}  Backend API › ${CYAN}${API_BASE}${RESET}"
   fi
   echo -e "${BOLD}║${RESET}  Directorio  › ${INSTALL_DIR}"
   echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
@@ -418,7 +529,8 @@ install_local() {
   fi
 
   # Algunas distros (Debian/Ubuntu) separan el módulo venv del paquete base.
-  if $IS_LINUX && ! "$PYTHON" -c "import venv" 2>/dev/null; then
+  if $IS_LINUX && [ "$INSTALL_COMPONENT" != "frontend" ] \
+      && ! "$PYTHON" -c "import venv" 2>/dev/null; then
     info "Instalando soporte de entornos virtuales (venv)..."
     _detect_pkg_manager
     case "$PKG_MANAGER" in
@@ -442,25 +554,27 @@ install_local() {
     success "git ya instalado: $(git --version)"
   fi
 
-  # ── 4. Node.js ───────────────────────────────────────────────────────────
-  step "Comprobando Node.js"
-  if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
-    info "Node.js no encontrado. Instalando..."
-    if $IS_MAC; then
-      brew install node
+  # ── 4. Node.js (solo si se instala frontend) ─────────────────────────────
+  if [ "$INSTALL_COMPONENT" != "backend" ]; then
+    step "Comprobando Node.js"
+    if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
+      info "Node.js no encontrado. Instalando..."
+      if $IS_MAC; then
+        brew install node
+      else
+        _detect_pkg_manager
+        case "$PKG_MANAGER" in
+          apt-get) $PKG_INSTALL nodejs npm ;;
+          dnf|yum) $PKG_INSTALL nodejs npm ;;
+          pacman)  $PKG_INSTALL nodejs npm ;;
+          zypper)  $PKG_INSTALL nodejs20 npm20 2>/dev/null || $PKG_INSTALL nodejs npm ;;
+        esac
+      fi
+      command -v node &>/dev/null || error "No se pudo instalar Node.js automáticamente. Instálalo manualmente desde https://nodejs.org y vuelve a ejecutar este script."
+      success "Node.js instalado: $(node --version)"
     else
-      _detect_pkg_manager
-      case "$PKG_MANAGER" in
-        apt-get) $PKG_INSTALL nodejs npm ;;
-        dnf|yum) $PKG_INSTALL nodejs npm ;;
-        pacman)  $PKG_INSTALL nodejs npm ;;
-        zypper)  $PKG_INSTALL nodejs20 npm20 2>/dev/null || $PKG_INSTALL nodejs npm ;;
-      esac
+      success "Node.js encontrado: $(node --version)"
     fi
-    command -v node &>/dev/null || error "No se pudo instalar Node.js automáticamente. Instálalo manualmente desde https://nodejs.org y vuelve a ejecutar este script."
-    success "Node.js instalado: $(node --version)"
-  else
-    success "Node.js encontrado: $(node --version)"
   fi
 
   # ── 5. Clonar o actualizar repositorios ───────────────────────────────────
@@ -470,8 +584,12 @@ install_local() {
   mkdir -p "${INSTALL_DIR}"
 
   _clone_or_update "${REPO_URL}"          "${INSTALL_DIR}/iAgents"                "iagentshub"
-  _clone_or_update "${BACKEND_REPO_URL}"  "${INSTALL_DIR}/backend_fastapi"        "backend"
-  _clone_or_update "${FRONTEND_REACT_URL}" "${INSTALL_DIR}/frontend_react"         "frontend React"
+  if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+    _clone_or_update "${BACKEND_REPO_URL}" "${INSTALL_DIR}/backend_fastapi" "backend"
+  fi
+  if [ "$INSTALL_COMPONENT" != "backend" ]; then
+    _clone_or_update "${FRONTEND_REACT_URL}" "${INSTALL_DIR}/frontend_react" "frontend React"
+  fi
   success "Repositorios listos."
 
   # El entorno virtual/dependencias Python y el build de React los gestiona
@@ -484,14 +602,33 @@ install_local() {
     step "Configuración inicial"
     echo
 
-    if [ -t 0 ]; then
-      read -rp "  Usuario público del administrador [admin]: " INPUT_USERNAME
-      read -rp "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
-      read -rp "  Puerto [8007]: " INPUT_PORT
+    INPUT_USERNAME=""; INPUT_EMAIL=""; INPUT_PORT=""; INPUT_URL=""; INPUT_API_URL=""
+    case "$INSTALL_COMPONENT" in
+      full)
+        _prompt "  Puerto del frontend [8007]: " INPUT_PORT
+        ;;
+      backend)
+        _prompt "  URL del frontend autorizado [http://localhost:8007]: " INPUT_URL
+        _prompt "  Puerto del backend [8765]: " INPUT_PORT
+        ;;
+      frontend)
+        _prompt "  URL pública del backend (ej: https://api.midominio.com): " INPUT_API_URL
+        _prompt "  Puerto del frontend [8007]: " INPUT_PORT
+        ;;
+    esac
+    if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+      _prompt "  Usuario público del administrador [admin]: " INPUT_USERNAME
+      _prompt "  Email del administrador [admin@localhost.com]: " INPUT_EMAIL
     fi
     ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
     ADMIN_EMAIL="${INPUT_EMAIL:-admin@localhost.com}"
-    PORT="${INPUT_PORT:-8007}"
+    PORT="$([ "$INSTALL_COMPONENT" = backend ] && echo 8007 || echo "${INPUT_PORT:-8007}")"
+    GAIA_PORT_VALUE="$([ "$INSTALL_COMPONENT" = backend ] && echo "${INPUT_PORT:-8765}" || echo 8765)"
+    FRONTEND_URL="${INPUT_URL:-http://localhost:${PORT}}"
+    API_BASE_VALUE="${IAGENTSHUB_API_URL:-${INPUT_API_URL:-}}"
+    if [ "$INSTALL_COMPONENT" = "frontend" ] && [ -z "$API_BASE_VALUE" ]; then
+      error "El frontend aislado requiere IAGENTSHUB_API_URL o indicar la URL del backend."
+    fi
 
     SECRET=$("$PYTHON" -c "import secrets; print(secrets.token_hex(32))")
 
@@ -500,9 +637,12 @@ install_local() {
 # iAgents Hub — configuración generada el $(date '+%Y-%m-%d')
 # Edita este fichero y ejecuta: python3 gaia.py start --local
 
+IAGENTSHUB_COMPONENT=${INSTALL_COMPONENT}
 PORT=${PORT}
-GAIA_PORT=8765
-GAIA_FRONTEND_URL=http://localhost:${PORT}
+GAIA_PORT=${GAIA_PORT_VALUE}
+GAIA_FRONTEND_URL=${FRONTEND_URL}
+GAIA_CORS_ORIGINS=${FRONTEND_URL}
+API_BASE=${API_BASE_VALUE}
 
 # Secreto JWT — generado automáticamente
 GAIA_AGENTS_SECRET=${SECRET}
@@ -534,26 +674,50 @@ EOF
     success ".env creado."
   else
     warn ".env existente conservado (${ENV_FILE})."
+    API_BASE_VALUE="${IAGENTSHUB_API_URL:-$(sed -n 's/^API_BASE=//p' "$ENV_FILE" | tail -1)}"
+    if [ "$INSTALL_COMPONENT" = "frontend" ] && [ -z "$API_BASE_VALUE" ]; then
+      INPUT_API_URL=""
+      _prompt "  URL pública del backend (ej: https://api.midominio.com): " INPUT_API_URL
+      API_BASE_VALUE="$INPUT_API_URL"
+      [ -n "$API_BASE_VALUE" ] || error "El frontend aislado requiere la URL del backend."
+    fi
+    awk -v component="$INSTALL_COMPONENT" -v api_base="$API_BASE_VALUE" '
+      BEGIN { component_seen=0; api_seen=0 }
+      /^IAGENTSHUB_COMPONENT=/ { print "IAGENTSHUB_COMPONENT=" component; component_seen=1; next }
+      /^API_BASE=/ { print "API_BASE=" api_base; api_seen=1; next }
+      { print }
+      END {
+        if (!component_seen) print "IAGENTSHUB_COMPONENT=" component
+        if (!api_seen) print "API_BASE=" api_base
+      }
+    ' "$ENV_FILE" > "${ENV_FILE}.tmp"
+    mv "${ENV_FILE}.tmp" "$ENV_FILE"
   fi
 
   # ── 7. Arrancar ───────────────────────────────────────────────────────────
   step "Arrancando iAgents Hub"
   cd "${INSTALL_DIR}/iAgents"
+  if ! $FIRST_INSTALL; then
+    "$PYTHON" gaia.py stop --local
+  fi
   "$PYTHON" gaia.py start --local
   printf 'local\n' > "$MODE_FILE"
+  printf '%s\n' "$INSTALL_COMPONENT" > "$COMPONENT_FILE"
 
   # ── Resumen ───────────────────────────────────────────────────────────────
   # shellcheck disable=SC1090
   source "${ENV_FILE}" 2>/dev/null || true
   ADMIN_PASS_FILE="${INSTALL_DIR}/iAgents/data/.admin_pass"
   ADMIN_PASS=""
-  for _ in $(seq 1 15); do
-    if [ -f "$ADMIN_PASS_FILE" ]; then
-      ADMIN_PASS=$(cat "$ADMIN_PASS_FILE" 2>/dev/null || true)
-      break
-    fi
-    sleep 2
-  done
+  if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+    for _ in $(seq 1 15); do
+      if [ -f "$ADMIN_PASS_FILE" ]; then
+        ADMIN_PASS=$(cat "$ADMIN_PASS_FILE" 2>/dev/null || true)
+        break
+      fi
+      sleep 2
+    done
+  fi
 
   echo
   if $FIRST_INSTALL; then
@@ -565,14 +729,21 @@ EOF
     echo -e "${BOLD}║       Actualización completada ✓         ║${RESET}"
     echo -e "${BOLD}╠══════════════════════════════════════════╣${RESET}"
   fi
-  echo -e "${BOLD}║${RESET}  URL         › ${CYAN}http://localhost:${PORT:-8007}${RESET}"
-  echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}React${RESET}"
-  echo -e "${BOLD}║${RESET}  Usuario     › ${CYAN}${GAIA_ADMIN_USERNAME:-admin}${RESET}"
-  echo -e "${BOLD}║${RESET}  Email       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
-  if [ -n "${ADMIN_PASS}" ]; then
-    echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
+  echo -e "${BOLD}║${RESET}  Componentes › ${CYAN}${INSTALL_COMPONENT}${RESET}"
+  if [ "$INSTALL_COMPONENT" != "backend" ]; then
+    echo -e "${BOLD}║${RESET}  Frontend    › ${CYAN}http://localhost:${PORT:-8007}${RESET}"
+  fi
+  if [ "$INSTALL_COMPONENT" != "frontend" ]; then
+    echo -e "${BOLD}║${RESET}  Backend     › ${CYAN}http://localhost:${GAIA_PORT:-8765}${RESET}"
+    echo -e "${BOLD}║${RESET}  Usuario     › ${CYAN}${GAIA_ADMIN_USERNAME:-admin}${RESET}"
+    echo -e "${BOLD}║${RESET}  Email       › ${CYAN}${GAIA_ADMIN_EMAIL:-admin@localhost.com}${RESET}"
+    if [ -n "${ADMIN_PASS}" ]; then
+      echo -e "${BOLD}║${RESET}  Contraseña  › ${GREEN}${ADMIN_PASS}${RESET}"
+    else
+      echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ver: ${INSTALL_DIR}/iAgents/data/.admin_pass${RESET}"
+    fi
   else
-    echo -e "${BOLD}║${RESET}  Contraseña  › ${YELLOW}ver: ${INSTALL_DIR}/iAgents/data/.admin_pass${RESET}"
+    echo -e "${BOLD}║${RESET}  Backend API › ${CYAN}${API_BASE}${RESET}"
   fi
   echo -e "${BOLD}║${RESET}  Directorio  › ${INSTALL_DIR}"
   echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"

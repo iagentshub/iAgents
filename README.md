@@ -34,14 +34,17 @@ irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
 El script:
-1. En una instalación nueva pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite). En las actualizaciones detecta y conserva automáticamente el modo instalado.
-2. Instala lo que falte (Docker no instala nada más; sin Docker instala Python 3.11+, git y Node.js mediante el gestor de paquetes nativo).
-3. Arranca la aplicación React y muestra la URL, el email de admin y la contraseña generada.
+1. En una instalación nueva pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite).
+2. Permite instalar la aplicación **completa**, solo el **backend** o solo el **frontend**. El frontend aislado solicita la URL de su backend.
+3. En las actualizaciones detecta y conserva automáticamente ambas elecciones.
+4. Instala únicamente las dependencias y repositorios necesarios para los componentes elegidos.
+5. Arranca los servicios y muestra sus URLs y, si hay backend, las credenciales de administración.
 
 Para saltarte los prompts (reinstalación no interactiva / CI):
 
 ```bash
 IAGENTSHUB_MODE=docker bash install.sh
+IAGENTSHUB_MODE=local IAGENTSHUB_COMPONENT=backend bash install.sh
 ```
 
 > **Imagen Docker:** `ghcr.io/iagentshub/app:latest`, generada automáticamente por GitHub Actions.

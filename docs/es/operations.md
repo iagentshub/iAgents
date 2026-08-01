@@ -19,7 +19,10 @@ Una única URL por sistema operativo. El script instala la plataforma completa
 SQLite).
 
 El mismo comando sirve para instalar y actualizar. Tras la primera instalación,
-el instalador guarda la modalidad elegida y la reutiliza automáticamente.
+el instalador guarda la modalidad y los componentes elegidos y los reutiliza
+automáticamente. Se puede instalar la aplicación completa, solo el backend o
+solo el frontend. En este último caso solicita la URL del backend remoto y
+mantiene `/api` bajo el mismo origen mediante un proxy inverso.
 
 ### 🐳🐧🍎 Linux / macOS
 
@@ -50,9 +53,13 @@ powershell -File install.ps1 --help
 
 ```bash
 IAGENTSHUB_MODE=docker bash install.sh
+IAGENTSHUB_MODE=local IAGENTSHUB_COMPONENT=backend bash install.sh
+IAGENTSHUB_MODE=docker IAGENTSHUB_COMPONENT=frontend \
+  IAGENTSHUB_API_URL=https://api.ejemplo.com bash install.sh
 ```
 ```powershell
 $env:IAGENTSHUB_MODE = "docker"
+$env:IAGENTSHUB_COMPONENT = "backend"
 irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 

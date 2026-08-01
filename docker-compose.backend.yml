@@ -1,0 +1,79 @@
+# iAgents Hub — backend standalone desde GitHub Container Registry.
+
+services:
+  iagentshub:
+    image: ${IMAGE_REPOSITORY:-ghcr.io/iagentshub/backend}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    ports:
+      - "${BACKEND_PORT:-8765}:8765"
+    environment:
+      GAIA_DATA_DIR:             "/data"
+      GAIA_HOST:                 "0.0.0.0"
+      GAIA_PORT:                 "8765"
+      GAIA_RELOAD:               "false"
+      GAIA_FRONTEND_URL:         "${GAIA_FRONTEND_URL:-http://localhost:8007}"
+      GAIA_CORS_ORIGINS:         "${GAIA_CORS_ORIGINS:-${GAIA_FRONTEND_URL:-http://localhost:8007}}"
+      GAIA_AGENTS_SECRET:        "${GAIA_AGENTS_SECRET:-}"
+      GAIA_ADMIN_USERNAME:       "${GAIA_ADMIN_USERNAME:-admin}"
+      GAIA_ADMIN_EMAIL:          "${GAIA_ADMIN_EMAIL:-admin@localhost.com}"
+      GAIA_ADMIN_RESET:          "${GAIA_ADMIN_RESET:-}"
+      GAIA_REGISTRATION:         "${GAIA_REGISTRATION:-closed}"
+      GAIA_EMAIL_VERIFY:         "${GAIA_EMAIL_VERIFY:-false}"
+      GAIA_SMTP_HOST:            "${GAIA_SMTP_HOST:-}"
+      GAIA_SMTP_PORT:            "${GAIA_SMTP_PORT:-587}"
+      GAIA_SMTP_TLS:             "${GAIA_SMTP_TLS:-starttls}"
+      GAIA_SMTP_USER:            "${GAIA_SMTP_USER:-}"
+      GAIA_SMTP_PASS:            "${GAIA_SMTP_PASS:-}"
+      GAIA_SMTP_FROM:            "${GAIA_SMTP_FROM:-}"
+      GAIA_WEBMAIL_URL:          "${GAIA_WEBMAIL_URL:-}"
+      GAIA_RESET_EXPIRE_HOURS:   "${GAIA_RESET_EXPIRE_HOURS:-1}"
+      GAIA_MAX_GUEST_SESSIONS:   "${GAIA_MAX_GUEST_SESSIONS:-0}"
+      DATABASE_URL:              "${DATABASE_URL:-}"
+      GAIA_TRUSTED_PROXIES:      "${GAIA_TRUSTED_PROXIES:-127.0.0.1}"
+      STRIPE_SECRET_KEY:         "${STRIPE_SECRET_KEY:-}"
+      STRIPE_PUBLISHABLE_KEY:    "${STRIPE_PUBLISHABLE_KEY:-}"
+      STRIPE_WEBHOOK_SECRET:     "${STRIPE_WEBHOOK_SECRET:-}"
+      IMAGE_REPOSITORY:          "${IMAGE_REPOSITORY:-ghcr.io/iagentshub/backend}"
+      IMAGE_VARIANT:             "fastapi"
+      IMAGE_TAG:                 "${IMAGE_TAG:-latest}"
+      DOCKER_PROXY_URL:          "http://docker-proxy:2375"
+      WATCHTOWER_CONTAINER_NAME: "watchtower"
+    volumes:
+      - iagentshub_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/health'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  watchtower:
+    image: nickfedor/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_INTERVAL:-3600}"
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      POST: 1
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+
+volumes:
+  iagentshub_data:

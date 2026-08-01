@@ -42,10 +42,13 @@ A pull request cannot be merged if the checks fail.
 
 Pushes to `main` build multi-platform images (`amd64` and `arm64`) and publish
 them to GitHub Container Registry. The unified image is
-`ghcr.io/iagentshub/app:latest`; each build also retains an immutable React tag.
+`ghcr.io/iagentshub/app:latest`; standalone images are
+`ghcr.io/iagentshub/backend:latest` and `ghcr.io/iagentshub/frontend:latest`.
+Each build also retains an immutable tag.
 Changes to iAgents, the backend, React, or Flutter rebuild that image from the
 current code in all four repositories.
 
-The `iagentshub/app` package must be public in GitHub and grant Actions write
-access to all four repositories so installers can pull it without credentials
-and every workflow can publish it.
+The `app`, `backend`, and `frontend` packages must be public in GitHub so
+installers can pull them without credentials. In addition, `app` must grant
+Actions write access to iAgents, `backend_fastapi`, `frontend_react`, and
+`app_flutter`, as all four can rebuild the unified image.

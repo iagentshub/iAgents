@@ -8,6 +8,7 @@ uvicorn. gaia.py fija FRONTEND_DIR al directorio dist de frontend_react.
 Variables de entorno:
   PORT          Puerto en el que escucha (default: 8007)
   GAIA_PORT     Puerto del backend (default: 8765)
+  BACKEND_URL   URL de un backend externo (opcional)
   FRONTEND_DIR  Directorio con los estáticos (default: ../../frontend_react/dist)
 """
 
@@ -30,7 +31,9 @@ FRONTEND = Path(
     os.environ.get("FRONTEND_DIR", str(_HERE / ".." / ".." / "frontend_react" / "dist"))
 ).resolve()
 PORT = int(os.environ.get("PORT", "8007"))
-BACKEND = f"http://127.0.0.1:{os.environ.get('GAIA_PORT', '8765')}"
+BACKEND = os.environ.get("BACKEND_URL", "").rstrip("/") or (
+    f"http://127.0.0.1:{os.environ.get('GAIA_PORT', '8765')}"
+)
 
 # Rutas que redireccionan (sin barra → con barra, o alias)
 # Nota: "/" NO está aquí a propósito — se resuelve como fichero normal

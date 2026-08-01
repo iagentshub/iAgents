@@ -56,6 +56,8 @@ Las variables que controlan este comportamiento son:
 
 | Variable | Opciones | Descripción |
 |---|---|---|
+| `IAGENTSHUB_COMPONENT` | `full` / `backend` / `frontend` | Componentes desplegados. El instalador conserva la elección. |
+| `API_BASE` | URL HTTP(S) | Backend remoto usado por una instalación de solo frontend. |
 | `IMAGE_REPOSITORY` | `ghcr.io/iagentshub/app` | Repositorio de la imagen unificada en GitHub Container Registry. |
 | `IMAGE_TAG` | `latest` / cualquier tag React | Solo en modo Hub (`--hub`). Qué versión de la imagen unificada React se descarga. |
 

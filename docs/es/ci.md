@@ -42,11 +42,14 @@ Un pull request no puede fusionarse si las verificaciones fallan.
 
 Los pushes a `main` generan imágenes multi-plataforma (`amd64` y `arm64`) y
 las publican en GitHub Container Registry. La imagen unificada es
-`ghcr.io/iagentshub/app:latest`; también se conserva un tag React inmutable por
+`ghcr.io/iagentshub/app:latest`; las imágenes aisladas son
+`ghcr.io/iagentshub/backend:latest` y `ghcr.io/iagentshub/frontend:latest`.
+También se conserva un tag inmutable por
 compilación. Los cambios en iAgents, backend, React o Flutter reconstruyen esa
 imagen desde el código actual de los cuatro repositorios.
 
-El paquete `iagentshub/app` debe configurarse como público en GitHub y conceder
-acceso de escritura de Actions a los cuatro repositorios para que los
-instaladores puedan descargarlo sin credenciales y todos los workflows puedan
-publicarlo.
+Los paquetes `app`, `backend` y `frontend` deben configurarse como públicos en
+GitHub para que los instaladores puedan descargarlos sin credenciales. Además,
+`app` debe conceder acceso de escritura de Actions a iAgents,
+`backend_fastapi`, `frontend_react` y `app_flutter`, ya que los cuatro pueden
+reconstruir la imagen unificada.
