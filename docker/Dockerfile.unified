@@ -36,16 +36,20 @@ ENV GAIA_VERSION=$GAIA_VERSION
 LABEL org.iagentshub.version=$GAIA_VERSION
 LABEL org.opencontainers.image.source="https://github.com/iagentshub/iAgents"
 
-# Commit (SHA corto) de backend_fastapi y del frontend empaquetados en esta
-# imagen — GAIA_VERSION solo dice "cuándo" se construyó, no "qué" código de
-# cada repo lleva dentro. /api/admin/check-update los compara contra el HEAD
-# de main de cada repo para detectar cuál de los dos está desactualizado.
+# Commit (SHA corto) de backend_fastapi, frontend_react y app_flutter
+# empaquetados en esta imagen — GAIA_VERSION solo dice "cuándo" se construyó,
+# no "qué" código de cada repo lleva dentro. /api/admin/check-update los
+# compara contra el HEAD de main de cada repo para detectar cuál está
+# desactualizado.
 ARG BACKEND_COMMIT=dev
 ARG FRONTEND_COMMIT=dev
+ARG APP_COMMIT=dev
 ENV BACKEND_COMMIT=$BACKEND_COMMIT
 ENV FRONTEND_COMMIT=$FRONTEND_COMMIT
+ENV APP_COMMIT=$APP_COMMIT
 LABEL org.iagentshub.backend_commit=$BACKEND_COMMIT
 LABEL org.iagentshub.frontend_commit=$FRONTEND_COMMIT
+LABEL org.iagentshub.app_commit=$APP_COMMIT
 
 # nginx + supervisor + envsubst (gettext-base)
 RUN apt-get update && apt-get install -y --no-install-recommends \
