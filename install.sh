@@ -444,6 +444,7 @@ EOF
   echo -e "  Parar:       ${CYAN}cd ${INSTALL_DIR} && docker compose down${RESET}"
   echo -e "  Actualizar:  automático cada hora (Watchtower) · manual: ${CYAN}curl -fsSL ${GITHUB_RAW}/install.sh | bash${RESET}"
   echo -e "  Desactivar auto-actualización: ${CYAN}cd ${INSTALL_DIR} && docker compose stop watchtower${RESET}"
+  echo -e "  Limpiar imágenes/capas Docker antiguas sin usar: ${CYAN}docker system prune -f${RESET}"
   echo
 }
 
