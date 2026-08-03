@@ -182,6 +182,9 @@ services:
       DATABASE_URL: ""
       # Debe coincidir con el POSTGRES_PASSWORD del servicio postgres. Define en .env
       GAIA_DB_PASSWORD: "${GAIA_DB_PASSWORD:-}"
+      # Client ID de la GitHub OAuth App (Device Flow habilitado) para el botón
+      # "Conectar con GitHub" en Proveedores. No es secreto — define en .env.
+      GITHUB_OAUTH_CLIENT_ID: "${GITHUB_OAUTH_CLIENT_ID:-}"
     volumes:
       - iagentshub_backend:/app
       - iagentshub_data:/data
