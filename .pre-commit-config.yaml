@@ -19,3 +19,13 @@ repos:
         entry: python3 -m py_compile
         language: system
         files: ^gaia\.py$
+
+      # Solo el BOM, no el analizador entero: el hook tiene que correr en
+      # cualquier máquina y PSScriptAnalyzer no está instalado de serie. Sin BOM
+      # el instalador no parsea en Windows PowerShell 5.1 (ver validate.yml).
+      - id: install-ps1-bom
+        name: install.ps1 conserva el BOM UTF-8
+        entry: |-
+          python3 -c "import sys;[sys.exit(f'{p} sin BOM UTF-8, no parseara en PowerShell 5.1') for p in sys.argv[1:] if open(p,'rb').read(3)!=b'\xef\xbb\xbf']"
+        language: system
+        files: ^install\.ps1$

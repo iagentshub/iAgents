@@ -19,5 +19,33 @@ jobs:
       - name: Shellcheck install.sh
         run: shellcheck install.sh
 
+      # El gemelo Windows de install.sh no tenía linter, y se pasó por alto que
+      # el fichero estaba en UTF-8 SIN BOM: Windows PowerShell 5.1 —el shell por
+      # defecto de Windows— lo lee como ANSI, parte los caracteres de caja de las
+      # cabeceras, y a partir de ahí los '>' de las líneas siguientes se leen como
+      # redirecciones. 25 errores de parseo: el instalador no arrancaba salvo
+      # bajo pwsh 7. Se comprueban solo Error y ParseError a propósito; las 85
+      # advertencias de estilo que quedan son casi todas Write-Host, que en un
+      # instalador de consola es lo correcto.
+      - name: PSScriptAnalyzer install.ps1
+        shell: pwsh
+        run: |
+          # El BOM se comprueba a mano y no con la regla del analizador porque
+          # este runner es pwsh 7 sobre Linux, que lee UTF-8 sin BOM
+          # perfectamente: el fallo solo existe en PS 5.1. Si CI se limitara a
+          # parsear, quitar el BOM volvería a pasar desapercibido.
+          $b = [IO.File]::ReadAllBytes("install.ps1")
+          if ($b[0] -ne 0xEF -or $b[1] -ne 0xBB -or $b[2] -ne 0xBF) {
+            Write-Host "install.ps1 ha perdido el BOM UTF-8: no parseará en Windows PowerShell 5.1"
+            exit 1
+          }
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Error,ParseError
+          if ($r) { $r | Format-Table -AutoSize | Out-String -Width 200 | Write-Host; exit 1 }
+          Write-Host "install.ps1: BOM presente y sin errores de parseo"
+
       - name: Compile gaia.py
         run: python3 -m py_compile gaia.py
+
+      - name: Ruff gaia.py
+        run: pipx run ruff check gaia.py

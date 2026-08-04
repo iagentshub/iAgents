@@ -208,15 +208,117 @@ comprobar hoy: que una ruta no desaparezca en silencio.
 
 ### Fase 4 — deuda estructural
 
+#### Hecho
+
+**OPS-05 — el instalador de Windows no arrancaba.**
+Poner un linter a `install.ps1` era, sobre el papel, la tarea más aburrida de
+la lista. Lo primero que devolvió PSScriptAnalyzer fueron **25 errores de
+parseo**. No eran del analizador: el fichero estaba en UTF-8 **sin BOM**, y
+Windows PowerShell 5.1 —el shell por defecto de Windows, el que usa cualquiera
+que siga el README— lo lee como ANSI. Cada carácter de caja de las cabeceras
+(`╔`, `═`, `╣`) son tres bytes UTF-8 que se convierten en tres caracteres
+basura; uno de ellos rompe el cierre de una cadena, y a partir de ahí los `>`
+de las líneas siguientes se parsean como **redirección de salida**. El
+instalador solo funcionaba bajo pwsh 7.
+
+El arreglo son tres bytes. Lo que costó fue mirar.
+
+La verja no puede ser "que CI lo parsee": el runner es pwsh 7 sobre Linux y
+lee UTF-8 sin BOM perfectamente, así que quitar el BOM otra vez pasaría
+inadvertido. Se comprueban **los bytes** explícitamente, en pre-commit y en el
+workflow. El analizador va detrás, limitado a `Error,ParseError`: de las 85
+advertencias restantes 61 son `Write-Host`, que en un instalador de consola es
+justo lo que hay que usar, y 20 son falsos positivos de variables asignadas
+dentro de un `ForEach-Object` (que sí conserva el ámbito del llamador —
+comprobado, no supuesto).
+
+También entra `ruff` sobre `gaia.py`, que ya pasaba limpio.
+
+**OPS-05 — `pytest tests/ -q` fuera de pre-commit.**
+CI ya corría la suite entera en cada push y cada PR, así que el hook eran 14
+minutos duplicados por commit. Un cuarto de hora es exactamente lo que empuja a
+tirar de `--no-verify`, y eso además se salta ruff. Se quedan tres guardianes
+estructurales, **20 s**: contrato de rutas, frontera del invitado y `json_body`.
+No son tests de negocio; vigilan que el contorno de la API no se mueva sin que
+nadie se entere. Es el fallo que sale barato en el commit y caro tres commits
+después — el de prompts de la integración anterior habría saltado aquí.
+
+**BE-11 — código muerto y silencios.**
+`update_user_profile()` y su tabla `_PROFILE_SQL`: borrados, junto con los tres
+tests que existían solo para darles cobertura. No hay endpoint que edite el
+perfil, así que los campos se escriben en el registro y no se vuelven a tocar
+nunca. Si algún día hace falta editarlos, la función vuelve con su endpoint.
+
+Los cinco `_db_path` que ninguna clase leía: borrados. El **parámetro** se
+queda, porque lo pasan una veintena de sitios y quitarlo es un barrido por
+ficheros que ahora mismo están recibiendo commits de otros; el campo no, porque
+hacía creer que cada storage hablaba con *ese* fichero cuando la conexión la
+abre siempre `open_db()` con la config global.
+
+Los `Protocol` de `chat.py` se quedan —evitan un import circular con
+`app.storage.storage`— pero sin `@runtime_checkable`, que hacía creer en una
+comprobación en tiempo de ejecución que nunca existió, y con `_MemoryStorage` y
+`_SkillStorage` declarados `async`, que es como se les llama desde el primer
+día.
+
+Dos `except: pass` pasan a registrar: el del purgado por GDPR, que se tragaba
+en silencio el agente de un usuario que había pedido que le borraran los datos,
+y el de la verificación de `.admin_pass`, que era la diferencia entre "la
+contraseña del fichero sirve" y "gaia.py enseña una obsoleta". El de
+`flog._drop_conn` se queda mudo a propósito, con comentario: se llega ahí
+porque la conexión ya falló, y logear desde el handler de logs es montar una
+recursión.
+
+**FE-08 — tercera grafía.**
+«iAgentsHub» → «iAgents Hub» en `pricing`, `legacy`, la navegación y un stub de
+billing, en los dos idiomas. Con un test que recorre `lib/` y `assets/locales/`
+para que no haya una cuarta, porque nadie se lee los `.json` de locales enteros.
+Ojo: el nombre **nativo** de la app sí es «iAgents» a secas, y eso no se toca.
+
+**BE-10 — Claude ya escribe según genera.**
+Pedía `"stream": true` y luego se guardaba los deltas hasta tener la respuesta
+entera: era el único proveedor donde el usuario miraba una pantalla quieta toda
+la generación y luego le aparecía todo de golpe. La maquinaria que hacía falta
+—cola, hilo, heartbeat cada 10 s para que nginx no confunda la espera con un
+cuelgue— ya estaba escrita a mano dentro de la rama OpenAI-compat. Se ha sacado
+a `_stream_tokens()` y ahora la usan las dos, en vez de copiarla: treinta líneas
+duplicadas de cola y heartbeat son como se acaba arreglando el bug en una sola.
+
+`asyncio` estaba diferido dentro de `stream_chat()`. Es stdlib, no había ciclo
+que romper; sube al principio del módulo. Uno menos de los 77.
+
+El test comprueba que salen cuatro eventos `token` en orden para cuatro deltas,
+y se ha verificado que **falla** si se desconecta el callback.
+
+**FE-06 — accesibilidad.**
+El «4 `Semantics` en 251 ficheros» del plan asustaba más de lo debido: en
+Flutter, un `Tooltip` que envuelve ya pone la etiqueta semántica, y la
+navegación entera los tenía. Contando bien —mirando también lo que envuelve al
+botón, no solo sus argumentos— quedaban **once** botones de solo icono sin
+ningún nombre accesible: un lector de pantalla anunciaba «botón» y nada más.
+Entre ellos el de mostrar/ocultar contraseña del login y los de enviar y detener
+del chat. Ya tienen `tooltip:`; las cadenas `show_password`/`hide_password`
+llevaban traducidas desde siempre sin que nadie las usara.
+
+En React, `@axe-core/playwright` llevaba en `package.json` sin que lo importara
+nadie. Ya hay un spec que audita las cinco páginas públicas contra WCAG 2.1 A y
+AA. **Pasan las cinco sin tocar nada**: 12 reglas evaluadas, 0 incumplimientos.
+Solo las normativas, no las `best-practice` de axe, que traen criterios
+discutibles y convertirían la verja en ruido. CI ya corría todos los specs de
+`e2e/`, así que entra sola.
+
+Los dos guardianes se han verificado rompiéndolos a propósito. El de Flutter
+tuvo dos falsos negativos antes de servir: buscaba «tooltip» como subcadena y
+el comentario que explicaba el arreglo contenía la palabra, así que el test
+pasaba justo en el botón que lo había motivado.
+
+#### Pendiente
+
 | | Qué hacer |
 |---|---|
-| **BE-11** | `update_user_profile()` en `app/auth/auth.py` **no tiene ni un llamador**, junto con su tabla `_PROFILE_SQL`. Encontrado al buscar quién escribe `birth_date`/`gender`/`country`/`phone`: solo el registro |
-| **FE-08** | Tercera grafía del producto, encontrada al integrar: los locales de Flutter dicen «iAgentsHub» sin espacio en `pricing`, `legacy` y `nav` (`app_title`), donde React dice «iAgents Hub». La fase 2 solo unificó `about`, `docs` y `seo` |
-| **BE-08** | `admin.py` 1.737 líneas, `db.py` 1.515, `storage.py` 1.146. **No partir por tamaño**: los 77 imports diferidos dentro de funciones señalan dónde está cada ciclo. Empezar por `storage.py`, que son cuatro clases independientes en un fichero |
-| **BE-11** | Cinco storages reciben una ruta que ignoran (hay un `# informational only` reconociéndolo). Cuatro `Protocol` de `chat.py` nunca se usan en un `isinstance` y uno declara síncrono un método que se llama con `await`. 36 `except: pass` a triar — prioritarios los de `flog.py:58` y `auth/auth.py:726,814` |
-| **BE-10** | Claude pide `"stream": true` y luego acumula la respuesta entera: el usuario no ve nada hasta el final. El camino OpenAI-compat ya resuelve lo difícil (cola, hilo, heartbeat, reintentos de DNS); reutilizarlo cambiando el parser |
-| **FE-06** | Flutter tiene **4 `Semantics` en 251 ficheros** y ahora es el único cliente privado. Empezar por navegación y formularios de auth. En React, `@axe-core/playwright` está instalado y sin usar: conectarlo al smoke test que ya existe |
-| **OPS-05** | `install.ps1` (714 líneas) no tiene linter mientras su gemelo `install.sh` tiene shellcheck en pre-commit y en CI. El repo orquestador solo hace `py_compile`. Mover `pytest tests/ -q` de pre-commit a CI: una suite entera por commit empuja a saltarse el hook |
+| **BE-08** | `admin.py` 1.737 líneas, `db.py` 1.515, `storage.py` 1.146. **No partir por tamaño**: los imports diferidos dentro de funciones señalan dónde está cada ciclo. Empezar por `storage.py`, que son cuatro clases independientes en un fichero |
+| **BE-11** | Quedan ~33 `except: pass` por triar. Y el barrido del parámetro `db_path`: veinte y pico llamadas pasando una ruta que nadie usa, siete de ellas importando `DB_FILE` **por valor** a nivel de módulo, que es justo la trampa documentada en `CLAUDE.md`. Hoy es inocuo porque el valor no se lee; conviene hacerlo cuando no haya commits ajenos en vuelo sobre esos routers |
+| **FE-06** | Queda el resto de la accesibilidad: contraste, orden de foco y navegación por teclado en Flutter, que ningún guardián estático detecta. El de iconos solo cubre que cada botón tenga nombre |
 
 ---
 

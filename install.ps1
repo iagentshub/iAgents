@@ -1,4 +1,4 @@
-# install.ps1 — Instalación y actualización de iAgents Hub (Windows)
+﻿# install.ps1 — Instalación y actualización de iAgents Hub (Windows)
 #
 # Un único comando para instalar la plataforma completa (backend FastAPI y
 # frontend React) en Docker o sin Docker.
