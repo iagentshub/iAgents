@@ -109,7 +109,7 @@ services:
   # lo dejes vacío si activas esta opción a mano, Watchtower no arranca sin
   # token cuando la API HTTP está activada.
   watchtower:
-    image: nickfedor/watchtower
+    image: nickfedor/watchtower:1.20.2
     container_name: "${WATCHTOWER_CONTAINER_NAME:-iagentshub-watchtower}"
     restart: unless-stopped
     volumes:
@@ -142,7 +142,7 @@ services:
   # del host por nombre exacto (no solo "watchtower") — no crear, no exec, no
   # tomar el host. Es el trade-off descrito y aceptado para este toggle.
   docker-proxy:
-    image: tecnativa/docker-socket-proxy
+    image: tecnativa/docker-socket-proxy:v0.5.0
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

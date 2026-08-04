@@ -12,6 +12,8 @@ MEJORAS.txt
 *.log
 *.pid
 __pycache__/
+.pytest_cache/
+.DS_Store
 
 # Cuarentena: scripts/código sin referencias activas, conservados por si acaso
 old/
