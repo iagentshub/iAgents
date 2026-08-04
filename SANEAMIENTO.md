@@ -199,12 +199,19 @@ daemon. Reestructurar YAML de despliegue sin poder validarlo no compensa.
 ### Aplazado de la fase 3, con motivo
 
 **Generar tipos de Dart y TypeScript desde el esquema (la otra mitad de FE-05).**
-No se puede hacer todavía y no por falta de ganas: casi todos los handlers
-parsean el JSON a mano, así que **el esquema no sabe qué campos acepta cada
-endpoint**. Generar tipos a partir de él produciría firmas vacías que dan una
-falsa sensación de seguridad. Requiere antes cuerpos pydantic en los routers
-que faltan. Mientras tanto, el contrato de rutas cubre lo que sí se puede
-comprobar hoy: que una ruta no desaparezca en silencio.
+No se puede hacer todavía: **el esquema no sabe qué campos acepta la mayoría de
+endpoints**, porque el cuerpo se parsea a mano. Generar tipos a partir de él
+produciría firmas vacías que dan una falsa sensación de seguridad.
+
+Contado al integrar los banners de notificación, el reparto real es **43
+cuerpos a mano frente a 23 con pydantic** (65/35), no «casi todos a mano» como
+decía esta nota. Y va en la buena dirección: los banners llegaron con un
+`NotificationBannerPayload` que valida el rango de fechas en un
+`model_validator`. Cada handler que se convierte acerca el codegen a merecer la
+pena; el umbral no es «todos», es que quede poca superficie sin describir.
+
+Mientras tanto, el contrato de rutas cubre lo que sí se puede comprobar hoy:
+que una ruta no desaparezca en silencio.
 
 ### Fase 4 — deuda estructural
 
@@ -319,6 +326,7 @@ pasaba justo en el botón que lo había motivado.
 | **BE-08** | `admin.py` 1.737 líneas, `db.py` 1.515, `storage.py` 1.146. **No partir por tamaño**: los imports diferidos dentro de funciones señalan dónde está cada ciclo. Empezar por `storage.py`, que son cuatro clases independientes en un fichero |
 | **BE-11** | Quedan ~33 `except: pass` por triar. Y el barrido del parámetro `db_path`: veinte y pico llamadas pasando una ruta que nadie usa, siete de ellas importando `DB_FILE` **por valor** a nivel de módulo, que es justo la trampa documentada en `CLAUDE.md`. Hoy es inocuo porque el valor no se lee; conviene hacerlo cuando no haya commits ajenos en vuelo sobre esos routers |
 | **FE-06** | Queda el resto de la accesibilidad: contraste, orden de foco y navegación por teclado en Flutter, que ningún guardián estático detecta. El de iconos solo cubre que cada botón tenga nombre |
+| **FE-09** | La UI de banners de notificación (`bbf6c23`) entró con **677 líneas y ningún test**: 33 ficheros de Flutter, incluida la pantalla de administración con crear, editar y borrar. El backend sí trae los suyos. No es urgente —los guardianes de accesibilidad y grafía ya pasan por encima— pero es la única parte del admin sin red |
 
 ---
 
