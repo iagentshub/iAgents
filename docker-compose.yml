@@ -156,8 +156,9 @@ services:
       GAIA_ADMIN_USERNAME: "admin"
       # Pon "true" para resetear la contraseña del admin en el próximo arranque (quitar después)
       GAIA_ADMIN_RESET: ""
-      # open | closed | invite
-      GAIA_REGISTRATION: "invite"
+      # open | closed | invite. Mismo default que hub y backend: cerrado salvo
+      # que .env diga otra cosa (.env.example lo pone en invite).
+      GAIA_REGISTRATION: "${GAIA_REGISTRATION:-closed}"
       # false → usuarios auto-verificados; true → envía correo de verificación
       GAIA_EMAIL_VERIFY: "false"
       # ── SMTP (verificación de email y recuperación de contraseña) ────────────
@@ -176,8 +177,9 @@ services:
       GAIA_WEBMAIL_URL: ""
       # Tiempo de validez del enlace de recuperación (horas)
       GAIA_RESET_EXPIRE_HOURS: "1"
-      # Máximo de sesiones guest simultáneas
-      GAIA_MAX_GUEST_SESSIONS: "200"
+      # Máximo de sesiones guest simultáneas. 0 desactiva el acceso de invitado;
+      # mismo default que hub y backend (.env.example lo sube a 200 para el demo).
+      GAIA_MAX_GUEST_SESSIONS: "${GAIA_MAX_GUEST_SESSIONS:-0}"
       # postgresql://gaia:password@postgres:5432/iagentshub — leave empty for SQLite
       DATABASE_URL: ""
       # Debe coincidir con el POSTGRES_PASSWORD del servicio postgres. Define en .env
@@ -194,7 +196,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/auth/me'); r=c.getresponse(); exit(0 if r.status<500 else 1)" ]
+      test: [ "CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/health'); r=c.getresponse(); exit(0 if r.status<500 else 1)" ]
       interval: 30s
       timeout: 10s
       retries: 3
