@@ -143,10 +143,10 @@ tier e intervalo en la capa de servicio y devuelve 400. El agujero real era el
 
 ## Pendiente
 
-### Bloqueado por falta de Docker
+### Estuvo bloqueado por falta de Docker
 
-Docker Desktop no estaba levantado, así que estas dos quedaron fuera. **No se
-aplicaron a medias: no se tocaron.**
+Con Docker levantado se cerraron las dos primeras. Queda la tercera, que ya no
+está bloqueada: es trabajo pendiente sin más.
 
 #### 1. Hecho — las 308 verificadas en vivo
 
@@ -172,24 +172,58 @@ Dos avisos para quien repita la comprobación:
   `return` y no necesitan ficheros; para comprobar las públicas hay que montar
   un `dist/` de verdad.
 
-#### 2. `USER` en los Dockerfiles — **no es la línea única que decía el plan**
+#### 2. Hecho — los contenedores ya no corren como root
 
-Los cinco contenedores corren como root. El plan original lo daba por trivial;
-no lo es, y por eso se dejó pendiente en vez de improvisarlo:
+El plan original lo daba por una línea; no lo era, y por eso se había dejado
+sin tocar. Cada imagen ha necesitado una solución distinta.
 
-- **`backend/Dockerfile`** — escucha en 8765 (no necesita root) pero escribe en
-  el volumen `/data`. Añadir `USER` a secas rompe **las instalaciones ya
-  existentes**, porque el volumen creado antes pertenece a root y el proceso sin
-  privilegios ya no puede escribirlo. Hace falta un entrypoint que arranque como
-  root, ajuste la propiedad de `/data` y baje privilegios (`su-exec`/`gosu`).
-- **`frontend_react/Dockerfile`** y **`docker/Dockerfile.unified`** — nginx
-  necesita root para escuchar en el puerto 80. Requiere pasar a
-  `nginxinc/nginx-unprivileged` con un puerto >1024, o dar
-  `CAP_NET_BIND_SERVICE`. La unificada además lleva supervisord con nginx y
-  uvicorn juntos.
+**backend** — `USER` a secas rompe **las instalaciones existentes**: el volumen
+`/data` se creó siendo root y el proceso sin privilegios no podría escribir su
+propia base de datos. No al instalar, donde se vería enseguida, sino al
+**actualizar**, que es cuando ya hay datos dentro. De ahí el entrypoint: arranca
+como root, cede `/data` y baja privilegios con `setpriv` —ya viene en la imagen
+y hace `exec` directo, así que señales y código de salida llegan al proceso
+real—. El `chown -R` solo la primera vez.
 
-Nada de esto se puede verificar sin levantar los contenedores, y un fallo aquí
-deja a los usuarios sin poder arrancar tras actualizar.
+**frontend** — no monta volumen, así que no hay nada que ceder: basta `USER`.
+El puerto se queda en el **80**. Cambiarlo a 8080 con `nginx-unprivileged`
+obligaría a tocar el `"${PORT}:80"` de los tres composes y el de cualquiera que
+tenga el suyo, que se quedaría sin frontend al actualizar. No hace falta:
+Docker arranca con `net.ipv4.ip_unprivileged_port_start=0` y un usuario normal
+puede atar al 80.
+
+**unificada** — aquí el `setpriv` del backend **no funciona**, y el motivo
+merece quedar escrito: al cambiar de uid el kernel marca el proceso como no
+volcable y `/proc/self/fd/1` pasa a pertenecer a root, así que supervisord ya
+no puede abrir `/dev/stdout` para redirigir la salida de sus hijos — arranca y
+nginx y uvicorn mueren en bucle con `EACCES`. La solución es la que supervisor
+trae de serie: él se queda como root y sus hijos llevan `user=gaia`. Lo que
+importa es quién sirve red y quién toca los datos; supervisord no escucha en
+ningún sitio.
+
+**Verificado con Docker levantado**, que era lo que faltaba. En las tres
+imágenes: actualización sobre un volumen de root con datos previos —cede, baja
+a uid 1000, `jwt_secret` y fila de sqlite intactos—, reinicio sin volver a
+ceder, instalación nueva sobre volumen vacío, y `docker stop` en 1,2 s (las
+señales llegan; no hay SIGKILL por plazo agotado).
+
+Dos fallos que solo se veían al dejar de ser root:
+
+- **La imagen del backend escribía fuera del volumen.** Sin `GAIA_DATA_DIR`,
+  `DATA_DIR` caía a su valor por defecto —hermano del repo, que dentro del
+  contenedor es `/iAgents`— y los datos se perdían al recrear el contenedor,
+  sin un solo error. Los composes ya lo fijaban, así que solo mordía al
+  arrancar la imagen a mano. Ahora lo fija el Dockerfile.
+- **`Dockerfile.unified` no normalizaba CRLF** mientras el de `frontend_react`
+  sí. Un `gaia.py push` desde Windows producía una imagen con `#!/bin/sh
+`,
+  que muere diciendo que no encuentra un intérprete que sí existe. CI no lo veía
+  porque hace checkout en Linux.
+
+Y un tercero, encontrado al construir: `nginx -t` corre como root durante el
+build y deja un `/run/nginx.pid` suyo, así que ceder solo el directorio no
+basta — nginx muere con `permission denied` sobre un `/run` en el que sí puede
+escribir.
 
 #### 3. Fragmento compose compartido
 

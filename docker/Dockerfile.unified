@@ -85,7 +85,41 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 COPY entrypoint-unified.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# El sed no sobra: `gaia.py push` construye desde una copia de trabajo, y en
+# Windows con core.autocrlf este fichero llega con CRLF. El shebang queda como
+# "#!/bin/sh\r" y el contenedor muere con "no such file or directory" señalando
+# un intérprete que sí existe. CI no lo veía porque hace checkout en Linux.
+# frontend_react/Dockerfile ya se protegía; este no.
+RUN sed -i 's/\r$//' /entrypoint.sh \
+    && chmod +x /entrypoint.sh
+
+# ── Usuario sin privilegios ───────────────────────────────────────────────────
+# El contenedor SIGUE arrancando como root: el entrypoint tiene que ceder /data
+# antes de bajar privilegios (ver entrypoint-unified.sh).
+#
+# El puerto se queda en el 80. Cambiarlo obligaría a tocar el "${PORT}:80" de
+# los composes y el de cualquiera que tenga el suyo; no hace falta, porque
+# Docker arranca con net.ipv4.ip_unprivileged_port_start=0 y un usuario normal
+# puede atar al 80. Si un runtime no lo permitiera, nginx fallaría al arrancar
+# de forma ruidosa, no en silencio.
+#
+# Lo que se escribe en cada arranque: el pid y la caché de nginx, sus logs, el
+# socket de supervisor y el env.js del cliente. env.js se pre-crea para
+# cedérselo suelto en vez de dar /usr/share/nginx/html entero, que dejaría el
+# sitio estático escribible por quien lo sirve.
+# /run va con -R y no es un detalle: el `nginx -t` de más arriba corre como
+# root durante el build y deja un /run/nginx.pid suyo. Ceder solo el directorio
+# deja ese fichero fuera, y nginx muere al arrancar con "open() /run/nginx.pid
+# failed (13: Permission denied)" pese a poder escribir en /run.
+#
+# La directiva `user` de nginx.conf se quita: solo tiene sentido si el master
+# es root, y si no se toca escupe un aviso en cada arranque.
+RUN useradd --system --create-home --uid 1000 gaia \
+    && touch /usr/share/nginx/html/env.js \
+    && mkdir -p /var/lib/nginx /var/log/nginx /run \
+    && sed -i '/^user\s\+/d' /etc/nginx/nginx.conf \
+    && chown -R gaia:gaia /var/lib/nginx /var/log/nginx /app /run \
+    && chown gaia:gaia /usr/share/nginx/html/env.js
 
 EXPOSE 80
 

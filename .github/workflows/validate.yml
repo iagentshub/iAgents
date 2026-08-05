@@ -25,6 +25,11 @@ jobs:
       - name: Shellcheck del validador de composes
         run: shellcheck scripts/validar-composes.sh
 
+      # El entrypoint de la imagen unificada no lo comprobaba nadie, y es el
+      # que decide si el contenedor arranca.
+      - name: Shellcheck del entrypoint unificado
+        run: shellcheck docker/entrypoint-unified.sh
+
       # El gemelo Windows de install.sh no tenía linter, y se pasó por alto que
       # el fichero estaba en UTF-8 SIN BOM: Windows PowerShell 5.1 —el shell por
       # defecto de Windows— lo lee como ANSI, parte los caracteres de caja de las
