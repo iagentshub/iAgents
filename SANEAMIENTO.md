@@ -141,12 +141,16 @@ tier e intervalo en la capa de servicio y devuelve 400. El agujero real era el
 
 ---
 
-## Pendiente
+## Lo que estaba pendiente
 
-### Estuvo bloqueado por falta de Docker
+Todo lo de esta sección está cerrado salvo el codegen de FE-05, que sigue
+aplazado con motivo. Se conserva el detalle porque explica decisiones que
+cuestan de reconstruir.
 
-Con Docker levantado se cerraron las dos primeras. Queda la tercera, que ya no
-está bloqueada: es trabajo pendiente sin más.
+### Estuvo bloqueado por falta de Docker — cerrado
+
+Con Docker levantado se hicieron las dos. La tercera (el fragmento compose
+compartido) se descartó a propósito al mirarla de cerca: ver más abajo.
 
 #### 1. Hecho — las 308 verificadas en vivo
 
@@ -225,14 +229,6 @@ build y deja un `/run/nginx.pid` suyo, así que ceder solo el directorio no
 basta — nginx muere con `permission denied` sobre un `/run` en el que sí puede
 escribir.
 
-#### 3. Fragmento compose compartido
-
-El par `watchtower` + `docker-proxy` y el bloque de entorno están copiados
-literalmente en tres composes. Se puede unificar con `extends:` o `include:`,
-pero **necesita `docker compose config` para validarse** y ese comando exige el
-daemon. Reestructurar YAML de despliegue sin poder validarlo no compensa.
-
----
 
 ### Aplazado de la fase 3, con motivo
 
@@ -633,6 +629,20 @@ dos. Queda abierta.
 - **Centinel (BE-07)** — decisión tomada: se queda como está. Son ~1.460 líneas
   en el backend más ~2.000 portadas a los clientes, pero se usa en soporte.
 - **Los 37 `fetch` crudos de vanilla y su linter** — el repo se retira.
+- **El fragmento compose compartido** — el par `watchtower` + `docker-proxy` y
+  el bloque de entorno están copiados en los tres composes, y en dos de ellos
+  son idénticos byte a byte. Sacarlos a un fichero común con `include:` parecía
+  obvio hasta mirar cómo llegan al usuario: `install.sh` e `install.ps1` bajan
+  **un solo fichero** con `curl` y lo guardan como `docker-compose.yml`. Un
+  compose que referencie un fragmento deja al instalador apuntando a algo que no
+  existe en esa máquina — y como el instalador **vuelve a sincronizar el compose
+  en cada actualización**, rompería también a todo el que ya lo tenga puesto.
+  Habría que bajar el fragmento en los dos instaladores y en el camino de
+  actualización: más superficie de fallo de la que ahorra, y justo donde un
+  fallo deja a la gente sin poder arrancar. **La duplicación está sosteniendo
+  algo**: es lo que hace que cada compose sea autónomo y se pueda `curl`.
+  Decisión tomada: se queda.
+
 - **El modelo blob/relacional de la BD** — la deuda es real (cada consulta por un
   campo interno exige parsear JSON) pero no está dando problemas medibles.
 
