@@ -29,3 +29,17 @@ repos:
           python3 -c "import sys;[sys.exit(f'{p} sin BOM UTF-8, no parseara en PowerShell 5.1') for p in sys.argv[1:] if open(p,'rb').read(3)!=b'\xef\xbb\xbf']"
         language: system
         files: ^install\.ps1$
+
+      # CLAUDE.md tiene que estar en DOS sitios y no hay forma de evitarlo:
+      # Claude Code lo carga desde la raíz de la carpeta de trabajo, que no es
+      # un repo, así que ahí no tiene historial ni se sincroniza. La copia
+      # versionada vive aquí. Dos ficheros derivan solos, de modo que se
+      # comparan; si falta el de la raíz no se dice nada, porque en CI y en un
+      # clon suelto no existe.
+      - id: claude-md-sincronizado
+        name: CLAUDE.md coincide con el de la raíz
+        entry: |-
+          python3 -c "import pathlib,sys; r=pathlib.Path('../CLAUDE.md'); c=pathlib.Path('CLAUDE.md'); sys.exit('CLAUDE.md y ../CLAUDE.md han divergido: copia el bueno sobre el otro' if r.exists() and r.read_bytes()!=c.read_bytes() else 0)"
+        language: system
+        files: ^CLAUDE\.md$
+        pass_filenames: false

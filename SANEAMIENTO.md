@@ -297,6 +297,106 @@ que romper; sube al principio del módulo. Uno menos de los 77.
 El test comprueba que salen cuatro eventos `token` en orden para cuatro deltas,
 y se ha verificado que **falla** si se desconecta el callback.
 
+**BE-12 — Ollama también, y ya están los tres.**
+Salió de documentar BE-10: al escribir «los dos caminos usan el helper» había
+que mirar el tercero, y Ollama pedía `"stream": False` y devolvía la respuesta
+de una vez. Al menos era honesto —no prometía un stream que luego no daba— pero
+el usuario veía exactamente lo mismo que con Claude: una pantalla quieta y todo
+de golpe.
+
+Con `_stream_tokens()` ya hecho, el arreglo fue un `on_token` y cambiar el
+parser: **Ollama responde NDJSON**, un objeto JSON por línea, no SSE, así que
+no hay prefijo `data: ` que quitar. El recuento de tokens solo viene en el
+último objeto, el del `done:true`.
+
+Mismo test que en Claude, y también verificado desconectando el callback.
+
+**BE-08 — la premisa era falsa, y eso cambia el trabajo.**
+El plan decía: «no partir por tamaño; los imports diferidos dentro de funciones
+señalan dónde está cada ciclo». Medido: **131 imports diferidos y 4 ciclos
+reales** en 105 módulos. Y tres de los cuatro son la jerarquía de modelos de
+agente (`models.agent` con `openai_agent`, `github_agent` y `claude_agent`),
+que es el patrón normal de una clase base que conoce a sus subclases para
+construirlas. El único ciclo de verdad discutible es
+`routes.accounts ↔ routes.connections`.
+
+O sea: los imports diferidos **no marcan ciclos**. Marcan dos cosas distintas
+que conviene no confundir:
+
+1. **Los que deben quedarse.** 27 son de `app.config.data` y `app.config.session`
+   — rutas y config que los tests reescriben. Subirlos los congelaría al
+   directorio de la fase de colección: es exactamente la trampa que documenta
+   `CLAUDE.md`, la que hizo que la puerta de licencias no se activara nunca.
+2. **Los que son costumbre.** El resto.
+
+Hecho en `storage.py`, que era el punto de partida que marcaba el plan: tenía
+**33 diferidos, 31 de ellos a `app.storage.db`**, y `db.py` no alcanza a
+`storage.py` ni directa ni indirectamente. Arriba los 31; el fichero baja de
+1.439 a 1.403 líneas y el total de diferidos de 162 a 131.
+
+`IS_PG` es el caso interesante y no se sube: es un **booleano** que el conftest
+reescribe con `monkeypatch.setattr(db, "IS_PG", False)`. Traerlo por valor
+congelaría el del arranque y, en una máquina con `DATABASE_URL` a Postgres, la
+suite entera generaría SQL con marcadores `$n` contra SQLite. Se lee como
+`_db.IS_PG`, que consulta el valor en cada llamada. Hay un test que falla si
+alguien lo reintroduce por valor — no comprueba comportamiento sino la forma
+del módulo, porque el fallo solo se ve en el entorno de otro.
+
+Queda partir los ficheros grandes de verdad (`admin.py` 1.786, `db.py` 1.515),
+pero ahora con el criterio correcto: por responsabilidad, no persiguiendo
+ciclos que no existen.
+
+**FE-09 — la UI de banners ya tiene red.**
+Los 33 ficheros de `bbf6c23` entraron sin un solo test. Ahora hay **20**, en
+dos ficheros: el modelo y los dos repositorios por un lado, y por otro la
+tarjeta de administración y el diálogo de alta y edición, montados a través de
+`AdminPage` porque son `part` privados. La suite de Flutter pasa de 187 a 207.
+
+No se tocó nada de `lib/`. Los tests se validaron **rompiendo el código de
+producción a propósito**, ocho veces —quitar el `sort`, invertir la comparación
+del rango, anular la validación del formulario, saltarse la confirmación de
+borrado, quitar el `Uri.encodeComponent` del id, cambiar el `put` por `post`,
+hacer que `_safeList` propague en vez de devolver vacío— y comprobando que cada
+mutación tumbaba el test que le tocaba.
+
+Un detalle que salió al hacerlo: **no hay lógica de vigencia en el cliente**.
+Quién está vigente lo decide `/api/settings/notification-banners/active` en el
+servidor y Flutter solo pinta lo que llega. La única regla temporal del cliente
+es la validación del formulario, y ahí las fronteras que importan son el rango
+invertido y el de duración cero — que es justo lo que distingue un `isAfter` de
+un `isBefore` negado.
+
+**El conflicto de Ollama, que conviene recordar.**
+BE-12 y un commit de `origin` tocaron a la vez la firma de `_do_ollama_call`:
+uno le añadía `api_key` como cuarto parámetro y el otro `on_token`. Git lo marcó
+como conflicto —eso salió bien— pero la resolución obvia era la peligrosa:
+`_stream_tokens` llama a `fn(*args, _on_token)`, con el callback como **último
+posicional**, así que dejar `api_key` detrás habría metido la función de
+callback dentro de una cabecera `Authorization`. Sin excepción, sin test rojo:
+un `Bearer <function _on_token at 0x...>` viajando al proveedor.
+
+Resuelto con `api_key` antes y `on_token` el último, y un comentario en la
+firma diciendo que ese orden no es negociable. La lección general: cuando el
+conflicto es sobre **el orden de unos parámetros posicionales**, que compile y
+que los tests pasen no demuestra nada — hay que comprobar qué argumento acaba
+en qué sitio.
+
+**OPS-06 — `CLAUDE.md` estaba fuera de todo repo.**
+Vivía solo en la raíz de la carpeta de trabajo, que no es un repo: sin
+historial, sin sincronizar, y perdido en cuanto alguien clonara de cero. Ya son
+12 KB describiendo justo lo que sale caro redescubrir — la trampa del import
+por valor, el BOM del instalador, la regla del invitado, los ciclos que no
+existen.
+
+No se puede simplemente mover: Claude Code lo carga desde la raíz de la carpeta
+de trabajo, y este repo es un **hermano** de esa raíz, no un padre. Si se
+mueve, deja de cargarse. Así que la copia versionada vive aquí y la de la raíz
+se queda donde tiene que estar.
+
+Dos ficheros iguales derivan solos, de modo que hay un hook que los compara
+byte a byte. Si falta el de la raíz no dice nada, porque en CI y en un clon
+suelto no existe.
+
 **FE-06 — accesibilidad.**
 El «4 `Semantics` en 251 ficheros» del plan asustaba más de lo debido: en
 Flutter, un `Tooltip` que envuelve ya pone la etiqueta semántica, y la
@@ -323,10 +423,10 @@ pasaba justo en el botón que lo había motivado.
 
 | | Qué hacer |
 |---|---|
-| **BE-08** | `admin.py` 1.737 líneas, `db.py` 1.515, `storage.py` 1.146. **No partir por tamaño**: los imports diferidos dentro de funciones señalan dónde está cada ciclo. Empezar por `storage.py`, que son cuatro clases independientes en un fichero |
+| **BE-08** | Quedan `admin.py` (1.786 líneas) y `db.py` (1.515). Partir **por responsabilidad**, no persiguiendo ciclos: ya está medido que no los hay (4 en 105 módulos, y 3 son la jerarquía de modelos). En `admin.py`, 9 de sus 19 diferidos son rutas de `app.config.data` y deben quedarse; los otros 10 son costumbre. El único ciclo que merece mirarse es `routes.accounts ↔ routes.connections` |
 | **BE-11** | Quedan ~33 `except: pass` por triar. Y el barrido del parámetro `db_path`: veinte y pico llamadas pasando una ruta que nadie usa, siete de ellas importando `DB_FILE` **por valor** a nivel de módulo, que es justo la trampa documentada en `CLAUDE.md`. Hoy es inocuo porque el valor no se lee; conviene hacerlo cuando no haya commits ajenos en vuelo sobre esos routers |
 | **FE-06** | Queda el resto de la accesibilidad: contraste, orden de foco y navegación por teclado en Flutter, que ningún guardián estático detecta. El de iconos solo cubre que cada botón tenga nombre |
-| **FE-09** | La UI de banners de notificación (`bbf6c23`) entró con **677 líneas y ningún test**: 33 ficheros de Flutter, incluida la pantalla de administración con crear, editar y borrar. El backend sí trae los suyos. No es urgente —los guardianes de accesibilidad y grafía ya pasan por encima— pero es la única parte del admin sin red |
+| **FE-10** | Dos asperezas de la UI de banners, ninguna un fallo activo. `_delete` hace `banner['id'] as String` mientras `_openEditDialog` usa el `as String?` seguro: un id ausente lanza un `CastError` que cae en el `catch` genérico y le dice al admin «No se pudo completar la acción» sin más pista. Y `NotificationBanner.fromJson` hace `json['message']?.toString()`, así que si alguna vez se le pasara la respuesta del listado de admin —donde `message` es un mapa de idiomas— pintaría `{es: Hola, en: Hi}` en vez de fallar de forma visible. Hoy no ocurre porque `/active` aplana el mensaje en el servidor |
 
 ---
 
