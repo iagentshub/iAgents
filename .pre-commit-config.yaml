@@ -41,5 +41,10 @@ repos:
         entry: |-
           python3 -c "import pathlib,sys; r=pathlib.Path('../CLAUDE.md'); c=pathlib.Path('CLAUDE.md'); sys.exit('CLAUDE.md y ../CLAUDE.md han divergido: copia el bueno sobre el otro' if r.exists() and r.read_bytes()!=c.read_bytes() else 0)"
         language: system
-        files: ^CLAUDE\.md$
+        # always_run, no `files: ^CLAUDE\.md$`: la copia que se edita a diario
+        # es la de la RAÍZ, que no está en ningún repo. Si el hook solo mirara
+        # cuando este CLAUDE.md va en el commit, la raíz podría reescribirse
+        # entera sin que nada saltara —justo lo que se creyó que había pasado—.
+        # Comparar dos ficheros son microsegundos; que corra siempre.
+        always_run: true
         pass_filenames: false

@@ -598,28 +598,30 @@ dos. Queda abierta.
 - **El modelo blob/relacional de la BD** — la deuda es real (cada consulta por un
   campo interno exige parsear JSON) pero no está dando problemas medibles.
 
-### 4. `iAgents/CLAUDE.md` ha divergido del `CLAUDE.md` de la raíz
+### 4. Resuelta — la divergencia de `CLAUDE.md` no existía
 
-OPS-06 dejó un hook (`claude-md-sincronizado`) que compara los dos ficheros
-byte a byte, pero **solo corre cuando `CLAUDE.md` está entre los ficheros del
-commit** (`files: ^CLAUDE\.md$`). Desde que se creó la copia versionada
-(`cf54fb9`) nadie ha vuelto a tocarla, así que la raíz pudo reescribirse por
-completo sin que el hook se enterara — y se reescribió: describe repos que ya
-no existen con ese nombre (`backend/` en vez de `backend_fastapi/`) y hasta
-invierte los papeles de dos carpetas (`iagentshub/` como orquestador y
-`iAgents/` como "solo datos", cuando en disco es al revés: `iAgents/` tiene
-`gaia.py`, `iagentshub/` solo `data/`).
+Esta entrada describía un problema que **no se sostiene al mirar el disco**, y
+se deja escrita en vez de borrarse porque el error es instructivo:
 
-No es un simple "copia el bueno sobre el otro" como dice el propio mensaje del
-hook: la copia de `iAgents/` no es una copia vieja de la raíz, es un documento
-distinto y más largo (274 líneas frente a 76) con contenido real que no está
-en la raíz — comandos de backend, la jerarquía `require_auth`/`require_session`,
-la trampa del import por valor, el patrón de streaming. Sobrescribirla
-perdería eso. Las opciones son: (a) que el hook deje de exigir igualdad byte a
-byte y compare solo que ambos existan y no citen rutas que ya no están en
-disco, o (b) fusionar a mano y aceptar que son documentos con propósito
-distinto. Es una decisión de para quién es cada documento, no mecánica —
-queda abierta.
+| Lo que decía | Lo que hay |
+|---|---|
+| existe `iAgents/CLAUDE.md`, 274 líneas | **no existe**: `iAgents/` solo tiene `data/` |
+| `gaia.py` está en `iAgents/` | está en `iagentshub/` |
+| el de la raíz tiene 76 líneas | tiene **274** |
+| los dos han divergido | **idénticos**, 12.115 bytes cada uno |
+
+O sea que la raíz describe el reparto de carpetas correctamente y no hay nada
+que fusionar. Lo que sí era cierto es la pega al hook: `files: ^CLAUDE\.md$`
+solo lo dispara cuando ese fichero entra en un commit **de este repo**, y la
+copia que se edita a diario es la de la raíz, que no está en ningún repo. Podía
+reescribirse entera sin que saltara nada — que es probablemente lo que hizo
+pensar que había pasado. Ya corre con `always_run`: comparar dos ficheros son
+microsegundos.
+
+La lección, que aplica a todo este documento: **una afirmación sobre el
+contenido del disco se comprueba con `ls` antes de escribirla.** Esta llegó a
+convertirse en una decisión abierta con dos opciones de resolución, ninguna de
+las cuales tenía sentido.
 
 ---
 
