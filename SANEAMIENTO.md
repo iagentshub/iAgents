@@ -148,25 +148,29 @@ tier e intervalo en la capa de servicio y devuelve 400. El agujero real era el
 Docker Desktop no estaba levantado, así que estas dos quedaron fuera. **No se
 aplicaron a medias: no se tocaron.**
 
-#### 1. Verificar en vivo las 308 antes de archivar `frontend_vanilla` en GitHub
+#### 1. Hecho — las 308 verificadas en vivo
 
-La copia local se borró (el repo está limpio, pusheado y el remoto intacto:
-`git clone https://github.com/iagentshub/frontend_vanilla.git` lo recupera).
-**El repo de GitHub sigue vivo y así debe seguir hasta hacer esta comprobación.**
+Con Docker ya levantado, se comprobaron contra nginx corriendo con la
+`nginx.react.conf` real y el `dist/` construido. **Las 20 rutas del regex de
+compatibilidad devuelven 308 a `/app/<misma ruta>`**, subrutas incluidas
+(`/agents/123`, `/u/pepito`, `/workflows/abc`). `/skills` da 301 a
+`/app/knowledge`, que es el alias legacy que ya tenía vanilla. Las cinco
+páginas públicas responden 200 y una URL inventada da 404, que es lo que dice
+el comentario de la config: React posee exactamente las URL pre-renderizadas.
 
-La equivalencia de rutas se probó estáticamente, comparando una a una lo que
-servía vanilla con lo que cubren React y la redirección 308. Apareció un único
-hueco, `/skills`, ya corregido (era un alias legacy a `/knowledge`, y Flutter no
-tiene ruta `/skills` porque las skills viven dentro de Conocimiento).
+**Ya se puede archivar `frontend_vanilla` en GitHub.**
 
-Falta recorrer con navegador, sobre la imagen unificada levantada:
+Dos avisos para quien repita la comprobación:
 
-```
-/            /docs      /pricing     /about      /support
-/dashboard   /agents    /orchestrations   /u/<usuario>   /checkout   /skills
-```
-
-Las seis últimas deben aterrizar en `/app/...` (Flutter).
+- `nginx.react.conf` es una **plantilla**, no una config. Montarla directamente
+  en `conf.d/default.conf` revienta con `unknown "backend_url" variable`: va en
+  `/etc/nginx/templates/default.conf.template`, y el entrypoint le pasa
+  `envsubst`.
+- La imagen `iagenthub/frontend:latest` que había en local tenía
+  `/usr/share/nginx/html` **vacío**, así que las páginas públicas daban 403/404
+  mientras las redirecciones funcionaban. Las redirecciones son directivas
+  `return` y no necesitan ficheros; para comprobar las públicas hay que montar
+  un `dist/` de verdad.
 
 #### 2. `USER` en los Dockerfiles — **no es la línea única que decía el plan**
 
