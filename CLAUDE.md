@@ -298,5 +298,24 @@ Its versioned copy lives at `iagentshub/CLAUDE.md`; a pre-commit hook there
 compares them byte for byte, because Claude Code loads this one from the
 working-folder root and that root is not a repo.
 
-`iagentshub/SANEAMIENTO.md` tracks the remediation backlog, what was
-deliberately deferred and why, and the open decisions.
+## Decisions already taken
+
+The remediation backlog that used to live in `iagentshub/SANEAMIENTO.md` is
+gone; git history holds what was done. These three are the only entries that
+were still live, and each one costs something real to rediscover:
+
+- **There are two `hub.db` and nobody has confirmed which install is the live
+  one.** `iAgents/data/hub.db` was the more recently modified and holds more
+  users and agents than `iagentshub/data/hub.db`, which is the opposite of what
+  you would assume from the directory names. **Confirm before deleting either.**
+- **Sections a guest cannot use are hidden in the client, never opened in the
+  backend.** `_visibleMainItems(role)` drops `workflows` from the Flutter
+  navigation catalogue for `role == 'guest'`. The fix for "the guest sees a
+  403" is always here, not a wider guard — see the allowlist rule above.
+  Checkout is the open one: it is reachable without a session at all, and
+  whether to block or redirect is a product call.
+- **The duplication across the three compose files is load-bearing.** Pulling
+  `watchtower` + `docker-proxy` into a shared fragment with `include:` looks
+  obvious until you notice `install.sh` and `install.ps1` `curl` **one file**
+  and save it as `docker-compose.yml` — on install *and* on every update. A
+  compose that references a fragment breaks everyone who already has it.
