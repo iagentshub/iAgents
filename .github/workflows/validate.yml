@@ -13,11 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Validate docker-compose.yml
-        run: docker compose config
+      # Los cinco, no solo el de por defecto: `docker compose config` a secas
+      # ignoraba los otros cuatro. Ver el script para las dos trampas (dev.yml
+      # es un override, y dos exigen variables a propósito).
+      - name: Validan los 5 composes
+        run: sh scripts/validar-composes.sh
 
       - name: Shellcheck install.sh
         run: shellcheck install.sh
+
+      - name: Shellcheck del validador de composes
+        run: shellcheck scripts/validar-composes.sh
 
       # El gemelo Windows de install.sh no tenía linter, y se pasó por alto que
       # el fichero estaba en UTF-8 SIN BOM: Windows PowerShell 5.1 —el shell por

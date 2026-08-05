@@ -7,11 +7,16 @@ repos:
 
   - repo: local
     hooks:
+      # `docker compose config` a secas solo mira el fichero por defecto, así
+      # que de los cinco composes se validaba uno mientras el files: de aquí
+      # decía que se validaban todos. El script los recorre como se usan de
+      # verdad: dev.yml apilado sobre el base, y los que exigen variables con
+      # ${VAR:?} rellenas para poder comprobar la estructura.
       - id: docker-compose-validate
-        name: Validate docker-compose.yml
-        entry: docker compose config
+        name: Validan los 5 composes
+        entry: sh scripts/validar-composes.sh
         language: system
-        files: ^docker-compose.*\.yml$
+        files: ^(docker-compose.*\.yml|scripts/validar-composes\.sh)$
         pass_filenames: false
 
       - id: gaia-py-syntax
