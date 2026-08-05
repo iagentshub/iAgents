@@ -48,6 +48,16 @@ IAGENTS_DIR = SCRIPT_DIR
 REPOS_ROOT = IAGENTS_DIR.parent
 IS_WINDOWS = platform.system() == "Windows"
 
+# Con stdout redirigido (pipe, fichero, CI) Windows usa cp1252 y los caracteres
+# de caja de los banners revientan con UnicodeEncodeError. La consola sí los
+# maneja, por eso solo se ve al redirigir.
+if IS_WINDOWS:
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
 # ── Colores ────────────────────────────────────────────────────────────────
 _USE_COLOR = sys.stdout.isatty()
 
@@ -305,7 +315,11 @@ def ensure_venv() -> None:
 
     if cur_hash != saved_hash:
         info("Instalando dependencias Python (puede tardar unos minutos)...")
-        subprocess.run([str(venv_pip()), "install", "-q", "--upgrade", "pip"], check=True)
+        # Via python -m pip: en Windows pip.exe no puede sobrescribirse a si mismo.
+        subprocess.run(
+            [str(venv_python()), "-m", "pip", "install", "-q", "--upgrade", "pip"],
+            check=True,
+        )
         subprocess.run([str(venv_pip()), "install", "-q", "-r", str(req)], check=True)
         hash_file.write_text(cur_hash)
         success("Dependencias instaladas.")

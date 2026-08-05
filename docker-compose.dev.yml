@@ -123,6 +123,8 @@ services:
     working_dir: /app
     environment:
       VITE_API_PROXY: "http://backend:8765"
+      # React sirve la web pública; Flutter sirve la aplicación privada en dev.
+      VITE_PRIVATE_APP_URL: "${VITE_PRIVATE_APP_URL:-http://127.0.0.1:7357}"
     volumes:
       - type: bind
         source: ${DEV_FRONTEND_REPO:-../frontend_react}
