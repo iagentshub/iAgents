@@ -70,15 +70,34 @@ three things, and the last one surprises people:
   `zod`. These belong to the authenticated app, which is Flutter.
 - a route area outside `public` / `shared`.
 - **the locale file list, which is frozen exactly**: `about`, `common`, `docs`,
-  `landing`, `pricing`, `seo`, `support`. Adding a locale file breaks the build
-  until you add it to the script too.
+  `landing`, `legal`, `pricing`, `seo`, `support`. Adding a locale file breaks
+  the build until you add it to the script too.
 
 `check` does **not** run the Playwright specs; they need a build and a server,
 so CI runs them (`test:e2e:chromium`, every spec in `e2e/`). Among them
-`a11y.spec.ts` audits the five public pages with axe against WCAG 2.1 A and AA
+`a11y.spec.ts` audits the seven public pages with axe against WCAG 2.1 A and AA
 — normative rules only, not axe's `best-practice` tag, which brings arguable
 criteria that would turn the gate into noise. Run it locally with
 `npx playwright test a11y --project=chromium`.
+
+#### Adding a public page is six files, not one
+
+A route in `router.tsx` is the part everyone remembers. The build then fails on
+the rest, one gate at a time:
+
+- `scripts/public-routes.mjs` — the single manifest that prerender, sitemap and
+  `seo:verify` all read. A page missing here is never prerendered, so nginx
+  404s a route the router swears exists.
+- `src/i18n/public-paths.ts` — `publicBasePaths`, which types `Seo`'s
+  `localizedPath` and drives the language switch. The `/en` variant is derived,
+  never written out, so base paths are English words even in Spanish.
+- `src/i18n/index.ts` — the `ns` list. The glob already loads the file; without
+  the namespace `t()` returns the raw key.
+- `scripts/verify-public-only.mjs` — the frozen locale list above.
+- `assets/locales/{es,en}/seo.json` — `seo:verify` demands one `<title>`, one
+  description, one `<h1>` and reciprocal hreflang per page.
+
+nginx needs nothing: `try_files $uri $uri.html` already serves `dist/x.html`.
 
 ### app_flutter
 
@@ -135,6 +154,15 @@ React; **everything behind a login is Flutter**. Legacy public paths 308 to
 When you add a public route, it belongs in React. When you add an app screen,
 it belongs in Flutter. Putting an authenticated route in React trips
 `public:verify`.
+
+The two directions cross exactly once: **the legal pages**. Privacy and terms
+are React (`/privacy`, `/terms`, plus `/en/…`), but Flutter's register screen
+has to link to them and gate the submit button on a checkbox — publishing the
+documents and never collecting acceptance leaves the contract without proof of
+consent. Flutter reaches them with `resolvePublicSiteUri`, not GoRouter: they
+live at the origin root, outside `/app/`, so it is browser navigation. Note
+the backend still stores neither the date nor the version accepted, so today
+consent is required but cannot be evidenced after the fact.
 
 ### Authorization is four dependencies
 
