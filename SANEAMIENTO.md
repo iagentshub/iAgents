@@ -3,7 +3,7 @@
 Documento de trabajo del plan de saneamiento derivado de la auditoría del 3 de
 agosto de 2026. Recoge lo hecho, lo que queda y las decisiones abiertas.
 
-Última actualización: 4 de agosto de 2026.
+Última actualización: 5 de agosto de 2026.
 
 ---
 
@@ -276,6 +276,43 @@ contraseña del fichero sirve" y "gaia.py enseña una obsoleta". El de
 porque la conexión ya falló, y logear desde el handler de logs es montar una
 recursión.
 
+Segunda pasada sobre BE-11: **17 silencios menos**. Los tres del export GDPR
+ahora distinguen JSON malformado de fallos inesperados, conservan el dato bruto
+cuando procede y dejan aviso; el fallo al escribir o proteger `.admin_pass`
+también registra el `OSError` sin impedir el arranque. En las migraciones SQLite
+se han eliminado otros trece: las columnas se añaden mediante una operación
+idempotente que solo tolera la carrera entre procesos si comprueba que la
+columna ya apareció, y la limpieza de tokens antiguos ya no oculta errores de
+esquema o de escritura. El inventario baja de **33 a 16**.
+
+Tercera pasada sobre BE-11: **cerrado el inventario de silencios**. El recuento
+anterior omitía dos `pass` de salud del servidor porque el comentario estaba en
+la propia línea del `except`; por tanto quedaban 18, no 16. Los 18 han salido:
+locales, knowledge y SSE de agentes; parsing de streaming; sincronización y
+prueba de recursos; Watchtower y las tres métricas opcionales de administración;
+y los siete de Centinel. Las degradaciones parciales siguen siendo degradables,
+pero registran qué se omitió. En Centinel, además, una cola llena descarta el
+evento viejo y conserva el más reciente, evitando perder un `done`/`aborted` y
+dejar el SSE esperando para siempre. Las cancelaciones esperadas se expresan con
+`contextlib.suppress` y los fallos de proceso o estado compartido dejan aviso.
+
+Un barrido AST confirma que el único `except` con `pass` que queda en `app/` es
+`flog._drop_conn`, el silencio deliberado ya documentado: el propio logger no
+puede logear que falló cerrando su conexión sin arriesgar recursión. Verificado
+con Ruff completo y **227 tests** de las rutas y servicios afectados.
+
+Cuarta pasada sobre BE-11: **cerrado el falso contrato `db_path`**. Los siete
+storages respaldados por SQLite (`AccountStorage`, `BillingStorage`,
+`ChatStorage`, `ConnectionStorage`, `GroupStorage`, `GroupShareStorage` y
+`KnowledgeStorage`) ya no aceptan una ruta que nunca utilizaban: la conexión
+sigue abriéndose mediante `open_db()` y su configuración global. Se han
+actualizado las **68 llamadas** y retirado **42 imports** que quedaron muertos,
+incluidos los imports de `DB_FILE` por valor. Un test de contrato fija las siete
+firmas sin argumentos; el barrido AST no encuentra llamadas antiguas ni otro
+constructor de storage con `db_path`. Verificado con compilación, Ruff, **86
+tests de storage** y **312 tests** de las rutas y flujos afectados. El único
+constructor que conserva `db_path` es `flog._DBHandler`, que sí abre esa ruta.
+
 **FE-08 — tercera grafía.**
 «iAgentsHub» → «iAgents Hub» en `pricing`, `legacy`, la navegación y un stub de
 billing, en los dos idiomas. Con un test que recorre `lib/` y `assets/locales/`
@@ -345,6 +382,42 @@ del módulo, porque el fallo solo se ve en el entorno de otro.
 Queda partir los ficheros grandes de verdad (`admin.py` 1.786, `db.py` 1.515),
 pero ahora con el criterio correcto: por responsabilidad, no persiguiendo
 ciclos que no existen.
+
+**BE-08 — completado el corte por responsabilidad.**
+`admin.py` deja de ser un router monolítico de 1.786 líneas y pasa a ser un
+paquete con un router compartido y cinco módulos: actualización, estadísticas,
+usuarios, recursos y exploración. La superficie pública no cambia: el contrato
+conserva las 220 rutas y los tests que parcheaban colaboradores internos apuntan
+ahora al submódulo propietario.
+
+`db.py` baja de 1.556 a **262 líneas** y queda limitado a detección del backend,
+`AsyncConn` y ciclo de vida de conexiones. Las 1.307 líneas de migraciones
+SQLite/PostgreSQL viven en `db_migrations.py`; `migrate_schema()` sigue siendo
+el único orquestador público. El helper de compactación que usa el storage se
+importa directamente desde el módulo nuevo, sin fingir que pertenece a la capa
+de conexión.
+
+Verificado con Ruff, compilación de los módulos, **165 tests críticos**
+(administración, auth relacionada, contrato de rutas, frontera de invitado,
+guardia de `json_body` y migraciones) y la suite completa de storage:
+**219 pasan, 1 skip**.
+
+Ese subconjunto no lo detectó: `__init__.py` importaba sus submódulos con
+`from app.api.routes.admin import (...)` — su propia ruta absoluta — y el
+detector estático de ciclos (`tests/test_ciclos_de_import.py`) lo lee como el
+módulo importándose a sí mismo. Salió al correr la suite **completa**
+(`1 failed, 1556 passed`), no en el subconjunto dirigido: exactamente el caso
+que el guardián existe para atrapar. Arreglado a `from . import (...)` —
+import relativo, el idiomático para un `__init__.py` que agrega sus propios
+submódulos — y no vuelve a aparecer en una segunda pasada completa
+(**1557 passed, 1 skipped, 0 failed**). El corte de responsabilidad y el
+retiro del contrato `db_path` (cuarta pasada) y el endurecimiento de
+silencios en auth/licenses/gdpr/Centinel (tercera pasada de BE-11, ver abajo)
+quedaron mezclados en un único commit: los cambios se pisaban archivo por
+archivo (p. ej. `storage.py` lleva a la vez el origen nuevo de
+`_compact_resource_data` y la eliminación de `ConnectionStorage.__init__`) y
+separarlos a mano con `git add -p` era más riesgo que beneficio para una
+prolijidad de historial.
 
 **FE-09 — la UI de banners ya tiene red.**
 Los 33 ficheros de `bbf6c23` entraron sin un solo test. Ahora hay **20**, en
@@ -419,14 +492,55 @@ tuvo dos falsos negativos antes de servir: buscaba «tooltip» como subcadena y
 el comentario que explicaba el arreglo contenía la palabra, así que el test
 pasaba justo en el botón que lo había motivado.
 
-#### Pendiente
+Segunda pasada sobre FE-06: **teclado y contraste del tema central cubiertos**.
+El único `GestureDetector` accionable que quedaba era cada nodo del grafo de
+recursos: se podía abrir y arrastrar con ratón, pero no alcanzarlo con Tab ni
+activarlo sin puntero. Ahora cada nodo expone semántica de botón, entra en el
+recorrido de foco con un contorno visible y responde a Enter y Espacio; el
+gesto de arrastre se conserva. Una regresión recorre el diálogo con Tab y abre
+la vista rápida con Enter. Otra fija el orden inicial de la navegación lateral:
+Dashboard → Explorar → Agentes.
 
-| | Qué hacer |
-|---|---|
-| **BE-08** | Quedan `admin.py` (1.786 líneas) y `db.py` (1.515). Partir **por responsabilidad**, no persiguiendo ciclos: ya está medido que no los hay (4 en 105 módulos, y 3 son la jerarquía de modelos). En `admin.py`, 9 de sus 19 diferidos son rutas de `app.config.data` y deben quedarse; los otros 10 son costumbre. El único ciclo que merece mirarse es `routes.accounts ↔ routes.connections` |
-| **BE-11** | Quedan ~33 `except: pass` por triar. Y el barrido del parámetro `db_path`: veinte y pico llamadas pasando una ruta que nadie usa, siete de ellas importando `DB_FILE` **por valor** a nivel de módulo, que es justo la trampa documentada en `CLAUDE.md`. Hoy es inocuo porque el valor no se lee; conviene hacerlo cuando no haya commits ajenos en vuelo sobre esos routers |
-| **FE-06** | Queda el resto de la accesibilidad: contraste, orden de foco y navegación por teclado en Flutter, que ningún guardián estático detecta. El de iconos solo cubre que cada botón tenga nombre |
-| **FE-10** | Dos asperezas de la UI de banners, ninguna un fallo activo. `_delete` hace `banner['id'] as String` mientras `_openEditDialog` usa el `as String?` seguro: un id ausente lanza un `CastError` que cae en el `catch` genérico y le dice al admin «No se pudo completar la acción» sin más pista. Y `NotificationBanner.fromJson` hace `json['message']?.toString()`, así que si alguna vez se le pasara la respuesta del listado de admin —donde `message` es un mapa de idiomas— pintaría `{es: Hola, en: Hi}` en vez de fallar de forma visible. Hoy no ocurre porque `/active` aplana el mensaje en el servidor |
+Los acentos tampoco cumplían siempre como texto o fondo: naranja sobre blanco
+quedaba en **2,80:1**, y red, azul y púrpura sobre el fondo oscuro no llegaban
+a **4,5:1**. El tema deriva ahora la variante mínima más cercana que supera AA
+contra su superficie y elige negro o blanco para `onPrimary`; el mismo color se
+aplica a `FilledButton`. Un guardián recorre los **14 identificadores de tema**
+y exige 4,5:1 en las dos combinaciones. Verificado con análisis dirigido sin
+incidencias y **22 tests** de tema, grafo, navegación y botones.
+
+**FE-10 — contratos de banners cerrados.**
+Editar y borrar comparten ahora la misma validación del identificador: un `id`
+ausente, vacío o de tipo incorrecto no abre el formulario ni la confirmación,
+no llama al backend y muestra un error localizado. Esto elimina tanto el
+`CastError` del borrado como la recreación accidental que podía provocar la
+ruta de edición al interpretar un `id` ausente como un alta.
+
+`NotificationBanner.fromJson` ya no convierte cualquier valor de `message` a
+texto. El contrato de `/active` exige una cadena ya resuelta en el idioma del
+usuario; recibir el mapa interno de idiomas o cualquier otro tipo provoca un
+`FormatException` explícito en vez de pintar su representación de depuración.
+Verificado con análisis dirigido sin incidencias, JSON de locales válido y
+**21 tests** de modelo, repositorio y widget. El análisis global conserva **19
+avisos informativos preexistentes**, todos fuera de los ficheros de FE-10.
+
+**FE-06 — colores de estado de Admin y Centinel, derivados AA.**
+Verde/naranja/rojo escritos como literal se pintaban como texto o icono
+directamente sobre `scheme.surface` — la tabla de logs (`_levelColor`), el
+veredicto de una prueba de Centinel (`_verdictBanner`) y el aviso de tope de
+usuarios (`_capNotice`) — fuera del contrato de `ColorScheme`: la misma
+constante pasa AA en un tema y falla en el otro, igual que el naranja de la
+primera pasada de FE-06. `AppTheme.statusColor(color, surface)` expone la
+derivación que ya usaba `_accessibleAccent` para los 14 identificadores;
+donde el fondo lleva un tinte al 12 % del color semántico, ese fondo se
+conserva y solo el texto/icono se deriva. Las badges compartidas
+(`OriginBadge`, `InactiveBadge`, `ResourceTypeBadge`) se revisaron y no
+tenían el bug: fondo sólido + texto blanco fijo, no dependen de
+`scheme.surface`. Verificado con `flutter analyze` (19 avisos preexistentes)
+y **213 tests**, incluido uno que exige 4,5:1 para `statusColor` contra las
+dos superficies.
+
+Con esto, FE-06 no tiene pendientes abiertos.
 
 ---
 
@@ -450,16 +564,31 @@ otra. Conviene confirmarlo antes de borrar ninguna de las dos.
 Flutter **no distingue al invitado** tras el login: lo lleva al mismo shell con
 la navegación completa. El demo funciona (agentes, conexiones, chat, skills,
 conocimiento, memoria) y se abrió además el catálogo público de *Explorar*, pero
-si un invitado entra en *Workflows* o *Facturación* verá un 403 donde antes veía
+si un invitado entra en *Workflows* verá un 403 donde antes veía
 una lista vacía —que "funcionaba" por accidente, no por diseño—.
 
 Lo correcto es **ocultar esas secciones al invitado en el cliente**, no abrir más
-endpoints en el backend. Queda por hacer en `app_flutter`.
+endpoints en el backend.
 
 **Prompts** ya no está en esa lista: es guest-aware por diseño y sus 4
-endpoints con rama `is_guest` están abiertos (ver arriba). Los que sí siguen
-cerrados y hay que ocultar en el cliente son *Workflows*, *Facturación* y las
-acciones de activar/desactivar prompt del grupo.
+endpoints con rama `is_guest` están abiertos (ver arriba). *Workflows* y las
+acciones de activar/desactivar prompt del grupo sí seguían cerradas y ya se
+ocultan en el cliente: `_visibleMainItems(role)` saca `workflows` del catálogo
+de navegación para `role == 'guest'` (sidebar expandido y rail contraído leen
+del mismo catálogo, así que basta un cambio), y el botón de activar/desactivar
+de la tarjeta de Prompts comprueba el mismo rol. 210→212 tests, dos nuevos
+cubren el sidebar y el rail.
+
+**Facturación queda fuera, y no por descuido.** No hay una entrada de sidebar
+llamada "Facturación" que ocultar: el perfil lee `/api/billing/subscription`
+y ya traga cualquier error (403 incluido), cayendo a `tier: 'free'` — el
+invitado nunca ve un fallo ahí. El único punto sin guardia es el checkout
+público (`/app/checkout`), alcanzable desde Precios sin sesión siquiera; si un
+invitado intenta suscribirse, la llamada a `/api/billing/subscribe` falla y el
+error se muestra inline en la propia página, no como un 403 crudo. Cerrarle el
+paso a un invitado ahí es una decisión de producto (¿bloquear antes de
+intentar? ¿redirigir a registro?), no un ocultamiento mecánico como los otros
+dos. Queda abierta.
 
 ### 3. Descartado a propósito
 
@@ -468,6 +597,29 @@ acciones de activar/desactivar prompt del grupo.
 - **Los 37 `fetch` crudos de vanilla y su linter** — el repo se retira.
 - **El modelo blob/relacional de la BD** — la deuda es real (cada consulta por un
   campo interno exige parsear JSON) pero no está dando problemas medibles.
+
+### 4. `iAgents/CLAUDE.md` ha divergido del `CLAUDE.md` de la raíz
+
+OPS-06 dejó un hook (`claude-md-sincronizado`) que compara los dos ficheros
+byte a byte, pero **solo corre cuando `CLAUDE.md` está entre los ficheros del
+commit** (`files: ^CLAUDE\.md$`). Desde que se creó la copia versionada
+(`cf54fb9`) nadie ha vuelto a tocarla, así que la raíz pudo reescribirse por
+completo sin que el hook se enterara — y se reescribió: describe repos que ya
+no existen con ese nombre (`backend/` en vez de `backend_fastapi/`) y hasta
+invierte los papeles de dos carpetas (`iagentshub/` como orquestador y
+`iAgents/` como "solo datos", cuando en disco es al revés: `iAgents/` tiene
+`gaia.py`, `iagentshub/` solo `data/`).
+
+No es un simple "copia el bueno sobre el otro" como dice el propio mensaje del
+hook: la copia de `iAgents/` no es una copia vieja de la raíz, es un documento
+distinto y más largo (274 líneas frente a 76) con contenido real que no está
+en la raíz — comandos de backend, la jerarquía `require_auth`/`require_session`,
+la trampa del import por valor, el patrón de streaming. Sobrescribirla
+perdería eso. Las opciones son: (a) que el hook deje de exigir igualdad byte a
+byte y compare solo que ambos existan y no citen rutas que ya no están en
+disco, o (b) fusionar a mano y aceptar que son documentos con propósito
+distinto. Es una decisión de para quién es cada documento, no mecánica —
+queda abierta.
 
 ---
 
