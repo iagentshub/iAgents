@@ -59,6 +59,10 @@ services:
       STRIPE_SECRET_KEY:         "${STRIPE_SECRET_KEY:-}"
       STRIPE_PUBLISHABLE_KEY:    "${STRIPE_PUBLISHABLE_KEY:-}"
       STRIPE_WEBHOOK_SECRET:     "${STRIPE_WEBHOOK_SECRET:-}"
+      # Client ID de la GitHub OAuth App (Device Flow habilitado) para el botón
+      # "Iniciar sesión con GitHub" en /login y "Conectar con GitHub" en
+      # Proveedores. No es secreto — define en .env.
+      GITHUB_OAUTH_CLIENT_ID:    "${GITHUB_OAUTH_CLIENT_ID:-}"
       API_BASE:                  ""
       # Usados por /api/admin/check-update para consultar las etiquetas
       # publicadas por GitHub Actions en GHCR.
