@@ -626,7 +626,7 @@ install_local() {
   success "Repositorios listos."
 
   # El entorno virtual/dependencias Python y el build de React los gestiona
-  # gaia.py por su cuenta (ensure_venv / ensure_frontend_build) al arrancar
+  # la CLI de gaia por su cuenta al arrancar
   # en el paso siguiente — no lo dupliques aquí.
 
   # ── 6. Configurar .env ────────────────────────────────────────────────────

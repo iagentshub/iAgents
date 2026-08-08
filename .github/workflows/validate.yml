@@ -55,8 +55,8 @@ jobs:
           if ($r) { $r | Format-Table -AutoSize | Out-String -Width 200 | Write-Host; exit 1 }
           Write-Host "install.ps1: BOM presente y sin errores de parseo"
 
-      - name: Compile gaia.py
-        run: python3 -m py_compile gaia.py
+      - name: Compila gaia.py y sus módulos
+        run: python3 -m compileall -q gaia.py gaia_cli
 
-      - name: Ruff gaia.py
-        run: pipx run ruff check gaia.py
+      - name: Ruff gaia.py y sus módulos
+        run: pipx run ruff check gaia.py gaia_cli

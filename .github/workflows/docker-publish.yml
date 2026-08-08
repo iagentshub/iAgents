@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Cambios en la orquestación (Dockerfile.unified*, gaia.py, entrypoints) afectan a
+  # Cambios en la orquestación (Dockerfile.unified*, gaia.py/gaia_cli, entrypoints) afectan a
   # ambas variantes de la imagen unificada — se reconstruyen y publican las dos.
   docker-react:
     runs-on: ubuntu-latest

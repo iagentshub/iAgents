@@ -20,10 +20,11 @@ repos:
         pass_filenames: false
 
       - id: gaia-py-syntax
-        name: Compile gaia.py
-        entry: python3 -m py_compile
+        name: Compila gaia.py y gaia_cli
+        entry: python3 -m compileall -q
         language: system
-        files: ^gaia\.py$
+        files: ^(gaia\.py|gaia_cli/.*\.py)$
+        pass_filenames: false
 
       # Solo el BOM, no el analizador entero: el hook tiene que correr en
       # cualquier máquina y PSScriptAnalyzer no está instalado de serie. Sin BOM

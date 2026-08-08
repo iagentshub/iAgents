@@ -51,7 +51,8 @@ IAGENTSHUB_MODE=local IAGENTSHUB_COMPONENT=backend bash install.sh
 
 Una vez instalado:
 
-`gaia.py` es un único script Python (sin dependencias externas) — igual en Linux, macOS y Windows:
+`gaia.py` es el entrypoint de una CLI Python modular en `gaia_cli/`, sin
+dependencias externas y con el mismo uso en Linux, macOS y Windows:
 
 ```bash
 cd ~/iagentshub/iAgents
