@@ -8,7 +8,7 @@ mkdir -p "${DATA_DIR}/logs"
 # Crear settings.json con secret JWT aleatorio y valores de plataforma por defecto
 # si no existe. Los valores se pueden cambiar después desde /admin/ → Configuración.
 if [ ! -f "${DATA_DIR}/settings.json" ]; then
-  SECRET=$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64 2>/dev/null || \
+  SECRET=$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64 2>/dev/null || \
            python3 -c "import secrets; print(secrets.token_hex(32))")
   # Valores de plataforma por defecto (conservadores para auto-hospedaje):
   #   billing_enabled      → false  (planes de pago desactivados)
