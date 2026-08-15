@@ -21,6 +21,12 @@ def _load_compose() -> dict:
     )
 
 
+def _load_hub_compose() -> dict:
+    return yaml.safe_load(
+        (REPO_ROOT / "docker-compose.hub.yml").read_text(encoding="utf-8")
+    )
+
+
 # .env / configuracion
 
 
@@ -78,6 +84,12 @@ def test_backend_mounts_data_volume():
     backend = compose["services"]["backend"]
     volumes = backend.get("volumes", [])
     assert any("data" in v for v in volumes), "Backend no monta el volumen de datos"
+
+
+def test_hub_watchtower_keeps_periodic_updates_with_http_api():
+    environment = _load_hub_compose()["services"]["watchtower"]["environment"]
+    assert environment["WATCHTOWER_HTTP_API_UPDATE"] == "true"
+    assert environment["WATCHTOWER_HTTP_API_PERIODIC_POLLS"] == "true"
 
 
 # estructura de datos
