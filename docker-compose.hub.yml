@@ -107,8 +107,10 @@ services:
   #
   # WATCHTOWER_HTTP_API_UPDATE expone POST /v1/update (puerto 8080, sin
   # "ports:" → solo alcanzable dentro de esta red de compose) para que
-  # /api/admin/update-now pueda forzar el ciclo ahora mismo en vez de esperar
-  # a WATCHTOWER_POLL_INTERVAL. install.sh genera y persiste
+  # /api/admin/update-now pueda forzar el ciclo ahora mismo. Al activar ese
+  # modo Watchtower deshabilita por defecto las comprobaciones programadas;
+  # HTTP_API_PERIODIC_POLLS las mantiene activas para revisar cada
+  # WATCHTOWER_POLL_INTERVAL. install.sh genera y persiste
   # WATCHTOWER_HTTP_API_TOKEN en .env (igual que GAIA_AGENTS_SECRET) — nunca
   # lo dejes vacío si activas esta opción a mano, Watchtower no arranca sin
   # token cuando la API HTTP está activada.
@@ -123,6 +125,7 @@ services:
       WATCHTOWER_CLEANUP: "true"
       WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_INTERVAL:-3600}"
       WATCHTOWER_HTTP_API_UPDATE: "true"
+      WATCHTOWER_HTTP_API_PERIODIC_POLLS: "true"
       WATCHTOWER_HTTP_API_TOKEN: "${WATCHTOWER_HTTP_API_TOKEN:?Define WATCHTOWER_HTTP_API_TOKEN en .env (vuelve a ejecutar install.sh para generarlo)}"
 
   # Proxy HTTP de acceso MUY restringido al socket de Docker — permite que el
