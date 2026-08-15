@@ -38,6 +38,7 @@ services:
       - "${PORT:-8007}:80"
     environment:
       GAIA_DATA_DIR:             "/data"
+      GAIA_LLM_MAX_THREADS:      "${GAIA_LLM_MAX_THREADS:-16}"
       GAIA_FRONTEND_URL:         "${GAIA_FRONTEND_URL:-http://localhost:8007}"
       GAIA_AGENTS_SECRET:        "${GAIA_AGENTS_SECRET:-}"
       GAIA_ADMIN_USERNAME:       "${GAIA_ADMIN_USERNAME:-admin}"
