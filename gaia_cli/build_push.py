@@ -108,6 +108,19 @@ def _push_react(image_repository: str, tag: str) -> str:
         _copy_git_tree(frontend_src, tmpdir / "frontend")
         if not (flutter_src / "pubspec.yaml").is_file():
             error("No se encontró pubspec.yaml en ../app_flutter/")
+        # `flutter build web` no borra lo que dejó de generar: los ficheros de
+        # una compilación anterior siguen ahí y entran enteros en el copytree de
+        # más abajo. El contexto de backend y frontend está a salvo porque
+        # `_copy_git_tree` solo copia lo trackeado en git; este viene de un
+        # directorio generado, así que la lista blanca no aplica y un asset
+        # rancio acabaría horneado en la imagen pública sirviendo /app/.
+        # Se borra solo build/web, no `flutter clean` entero: basta para
+        # garantizar que lo que se copia es de esta compilación, y conserva el
+        # resto de la caché (un clean completo añade minutos a cada push).
+        web_out = flutter_src / "build" / "web"
+        if web_out.exists():
+            info("Descartando build/web anterior...")
+            shutil.rmtree(web_out)
         info("Compilando Flutter Web para /app/...")
         subprocess.run(
             [
