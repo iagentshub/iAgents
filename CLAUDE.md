@@ -283,8 +283,28 @@ Keep that style — a comment restating the line below it is noise here.
 
 A `ponytail:` comment marks a **deliberate** simplification with a known
 ceiling, and names the ceiling so the next reader doesn't mistake it for an
-oversight (`ratelimit.py:43`, `tokens.py:39,143`, `flog.py:97`, plus one each in
-Flutter and the VS Code extension). It is not a TODO.
+oversight (`ratelimit.py`, `tokens.py`, `flog.py`, plus one each in Flutter and
+the VS Code extension — `grep -rn "ponytail:"` finds them). It is not a TODO.
+
+**A blind `except Exception` either logs with context or does not exist.** ruff
+enforces this (`BLE001`, `S110`, `S112` are in the `select` list). When the
+width is genuinely the design — a loop that must not stop on one bad item, a
+safety net inside an SSE stream that has already started emitting, the logger
+itself, where logging would recurse — mark it `# noqa: BLE001` and say why on
+the next line. Everything else logs through `flog` or gets deleted so the
+global handlers in `app/api/app.py` can take it. `app.storage.db.DB_ERRORS` is
+the tuple to catch when the expected failure is the database: it covers both
+drivers, so it works in SQLite and PostgreSQL alike.
+
+### Where the "why" lives
+
+Long decision essays belong in `docs/adr/`, one file per decision, dated, in
+Spanish only — they are internal engineering docs, so they sit outside the
+bilingual `docs/es` + `docs/en` that document the product. Move a comment block
+there when the reasoning is **transversal**: it spans files, or it is about
+operations or deployment, and someone may need it without opening that
+particular file. Leave it in the code when it explains the line right below it.
+Where a block moved, a `# Ver docs/adr/NNN-….md` line stays behind.
 
 ## Config
 
