@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from gaia_cli import cli, common
+from gaia_cli import compose as compose_mod
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -108,3 +109,98 @@ def test_cli_rechaza_flags_incompatibles(monkeypatch, capsys):
 def test_rutas_compartidas_siguen_apuntando_a_la_raiz_del_repo():
     assert common.IAGENTS_DIR == REPO_ROOT.resolve()
     assert common.SCRIPT_DIR == REPO_ROOT.resolve()
+
+
+# ── Secretos que compose exige sin valor por defecto ──────────────────────────
+
+
+def test_env_antiguo_recibe_el_token_de_watchtower(monkeypatch, tmp_path):
+    # docker-compose.hub.yml declara la variable como requerida: sin esto,
+    # `gaia.py start --hub` moría con un traceback de compose en cualquier
+    # instalación anterior a que la variable existiera.
+    env = tmp_path / ".env"
+    env.write_text("PORT=8007\nGAIA_DB_PASSWORD=yaesta\n", encoding="utf-8")
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    token = common.read_env_var(env, "WATCHTOWER_HTTP_API_TOKEN")
+    assert len(token) == 64
+    assert "GAIA_DB_PASSWORD=yaesta" in env.read_text(encoding="utf-8")
+
+
+def test_no_se_pisa_un_token_ya_generado(monkeypatch, tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("WATCHTOWER_HTTP_API_TOKEN=" + "a" * 64 + "\n", encoding="utf-8")
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    assert common.read_env_var(env, "WATCHTOWER_HTTP_API_TOKEN") == "a" * 64
+
+
+def test_env_sin_salto_final_no_pega_dos_variables(monkeypatch, tmp_path):
+    # Un .env editado a mano puede no acabar en \n; sin cuidar el salto,
+    # compose leería «PORT=8007WATCHTOWER_HTTP_API_TOKEN=…» como un solo valor.
+    env = tmp_path / ".env"
+    env.write_text("PORT=8007", encoding="utf-8")
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    assert common.read_env_var(env, "PORT") == "8007"
+    assert len(common.read_env_var(env, "WATCHTOWER_HTTP_API_TOKEN")) == 64
+
+
+def test_el_ejemplo_declara_el_token_sin_valor():
+    # Con valor sería el mismo secreto en todas las instalaciones; sin la
+    # línea, un .env recién creado vuelve a romper `--hub`.
+    lineas = (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+    assert "WATCHTOWER_HTTP_API_TOKEN=" in lineas
+
+
+# ── Un modo para el otro: los dos publican el mismo puerto ────────────────────
+
+
+@pytest.mark.parametrize(
+    ("hub", "esperado"),
+    [
+        (True, compose_mod.COMPOSE_DEV),
+        (False, compose_mod.COMPOSE_HUB),
+    ],
+)
+def test_arrancar_un_modo_baja_el_contrario(monkeypatch, hub, esperado):
+    ejecutados = []
+
+    class _Resultado:
+        stdout = "abc123\n"  # el otro stack tiene contenedores vivos
+
+    def _fake_run(args, **kwargs):
+        ejecutados.append(args)
+        return _Resultado()
+
+    monkeypatch.setattr(compose_mod.subprocess, "run", _fake_run)
+
+    compose_mod._stop_other_mode(hub, {})
+
+    assert ejecutados == [
+        ["docker", "compose", *esperado, "ps", "-q"],
+        ["docker", "compose", *esperado, "down", "--remove-orphans"],
+    ]
+
+
+def test_no_se_baja_nada_si_el_otro_modo_no_corre(monkeypatch):
+    ejecutados = []
+
+    class _Vacio:
+        stdout = ""
+
+    def _fake_run(args, **kwargs):
+        ejecutados.append(args)
+        return _Vacio()
+
+    monkeypatch.setattr(compose_mod.subprocess, "run", _fake_run)
+
+    compose_mod._stop_other_mode(True, {})
+
+    assert ejecutados == [["docker", "compose", *compose_mod.COMPOSE_DEV, "ps", "-q"]]

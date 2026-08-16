@@ -78,11 +78,40 @@ def _show_admin_info(compose: list[str], hub: bool = False) -> None:
     print()
 
 
+# Los ficheros compose de cada modo, para poder parar el que no se ha elegido.
+COMPOSE_DEV = ["-f", "docker-compose.yml", "-f", "docker-compose.dev.yml"]
+COMPOSE_HUB = ["-f", "docker-compose.hub.yml"]
+
+
+def _stop_other_mode(hub: bool, env: dict) -> None:
+    """Baja el stack del otro modo antes de levantar el elegido.
+
+    Los dos publican el mismo PORT, así que arrancar uno con el otro vivo
+    moría con «port is already allocated» y el traceback de compose que hay
+    detrás: el usuario ve un error de red donde el problema era de modo.
+    """
+    otro = COMPOSE_DEV if hub else COMPOSE_HUB
+    base = ["docker", "compose", *otro]
+
+    activos = subprocess.run(
+        base + ["ps", "-q"], env=env, capture_output=True, text=True, check=False
+    )
+    if not activos.stdout.strip():
+        return
+
+    info("Parando el otro modo, que ocupa el mismo puerto...")
+    # check=False: si el otro stack está a medias, no arrancar es peor que
+    # seguir con lo que sí se pudo bajar; el `up` de después dirá si el
+    # puerto sigue ocupado.
+    subprocess.run(base + ["down", "--remove-orphans"], env=env, check=False)
+
+
 def cmd_start(compose: list[str], dev: bool, hub: bool) -> None:
     check_docker()
     ensure_env()
     env = os.environ.copy()
     inject_github_token(env)
+    _stop_other_mode(hub, env)
     if dev:
         info("Modo desarrollo — usando repos locales")
     if hub:

@@ -80,6 +80,34 @@ def check_docker() -> None:
         error("Docker no está en ejecución. Árrancalo e inténtalo de nuevo.")
 
 
+def _ensure_env_secret(key: str, weak: tuple[str, ...] = ()) -> bool:
+    """Da a `key` un secreto aleatorio en .env si falta, está vacío o es débil.
+
+    Devuelve True solo si tuvo que escribirlo, para que quien llame decida qué
+    contar por pantalla. Un .env creado antes de que la variable existiera no
+    tiene la línea, así que hay que añadirla al final y no solo sustituirla.
+    """
+    actual = read_env_var(ENV_FILE, key)
+    if actual and actual not in weak:
+        return False
+
+    valor = _rand_hex()
+    lines = ENV_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={valor}\n"
+            break
+    else:
+        # Sin el salto, la variable se pegaría a la última línea del fichero
+        # cuando este no termina en \n y compose leería las dos como una.
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines.append(f"{key}={valor}\n")
+
+    ENV_FILE.write_text("".join(lines), encoding="utf-8")
+    return True
+
+
 def ensure_env() -> None:
     env_example = IAGENTS_DIR / ".env.example"
 
@@ -103,23 +131,21 @@ def ensure_env() -> None:
             "Revisa GAIA_FRONTEND_URL y GAIA_ADMIN_EMAIL si vas a desplegar en producción."
         )
         print()
-        return
+        # Sin `return`: las comprobaciones de abajo también valen para el .env
+        # recién creado, que hereda de .env.example las variables vacías.
 
-    # .env ya existe: asegurar que GAIA_DB_PASSWORD tiene un valor no vacío/débil
-    cur_pass = read_env_var(ENV_FILE, "GAIA_DB_PASSWORD")
-    if not cur_pass or cur_pass == "changeme":
-        db_pass = _rand_hex()
-        lines = ENV_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
-        found = False
-        for i, line in enumerate(lines):
-            if line.startswith("GAIA_DB_PASSWORD="):
-                lines[i] = f"GAIA_DB_PASSWORD={db_pass}\n"
-                found = True
-                break
-        if not found:
-            lines.append(f"GAIA_DB_PASSWORD={db_pass}\n")
-        ENV_FILE.write_text("".join(lines), encoding="utf-8")
+    # Asegurar que GAIA_DB_PASSWORD tiene un valor no vacío/débil
+    if _ensure_env_secret("GAIA_DB_PASSWORD", weak=("changeme",)):
         info("GAIA_DB_PASSWORD actualizado con valor aleatorio en .env")
+
+    # docker-compose.hub.yml declara WATCHTOWER_HTTP_API_TOKEN como variable
+    # requerida (`${VAR:?...}`), así que un .env anterior a esa variable hacía
+    # que `gaia.py start --hub` muriera con un traceback de compose. No lleva
+    # valor por defecto a propósito: es la credencial de POST /v1/update de
+    # Watchtower, y un literal en el repositorio sería el mismo secreto en
+    # todas las instalaciones. Se genera igual que en install.sh.
+    if _ensure_env_secret("WATCHTOWER_HTTP_API_TOKEN"):
+        info("WATCHTOWER_HTTP_API_TOKEN generado en .env")
 
 
 def get_port() -> str:

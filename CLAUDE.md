@@ -141,8 +141,18 @@ fail on files you may not think you touched:
   breaks — this test is what notices. A heavy new screen goes in deferred too.
 
 CI runs one more gate that `flutter test` cannot: `tool/check_web_bundle_size.sh`
-after `flutter build web --release`. It fails if `main.dart.js` crosses the budget
+after `tool/build_web.sh`. It fails if `main.dart.js` crosses the budget
 written in the script, or if the build produced no deferred parts at all.
+
+**Compile the web with `tool/build_web.sh`, never `flutter build web` directly.**
+Its flags have their other half in the CSP nginx serves — the `location ^~ /app/`
+block of `frontend_react/nginx.react.conf`. `--no-web-resources-cdn` keeps
+CanvasKit on our own origin, which is why that policy no longer allows
+`www.gstatic.com`; build without the flag and the authenticated app comes up
+blank, with no error and no failing test. The command used to be copied into six
+CI steps across four repos, so changing a flag meant four commits that landed at
+different times. `web_bundle_budget_test.dart` fails if a workflow goes back to
+calling `flutter build web` on its own.
 
 ### vs_code
 
