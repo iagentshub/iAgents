@@ -1,20 +1,27 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working in
+this working folder. It covers all five clones, so it is the one document
+that goes stale without any single repo's tests noticing — check what you
+read here against the tree before relying on it.
 
 ## This directory is not a repository
 
-`iagentshub/` is a working folder holding **five independent git clones** plus a
-data directory. There is no umbrella repo, no submodules, no workspace file.
+`all_iagenthub/` is a working folder holding **five independent git clones**.
+There is no umbrella repo, no submodules, no workspace file.
 
 | Directory | What it is |
 |---|---|
-| `backend/` | FastAPI + Python 3.12. The only server. |
+| `backend_fastapi/` | FastAPI. The only server. Python 3.12 in the image, 3.11 locally. |
 | `frontend_react/` | React 19 / Vite / TS. **Public pages only** — landing, pricing, docs, about, support. Also the nginx image that fronts everything. |
 | `app_flutter/` | Dart 3 / Flutter. The **entire authenticated app**, served under `/app/`. |
 | `vs_code/` | VS Code extension. Talks to the backend with a PAT. |
-| `iagentshub/` | Orchestrator: `gaia.py`, `install.sh`, `install.ps1`, the compose files. Ships no product code. |
-| `iAgents/` | Data only (`data/hub.db`, settings). Not a clone. |
+| `iAgents/` | Orchestrator: `gaia.py`, `install.sh`, `install.ps1`, the compose files. Ships no product code — **and holds the live data** under `data/` (`hub.db`, `settings.json`), which is gitignored. |
+
+Each directory name matches its remote under `github.com/iagentshub`
+(`iagentshub/backend_fastapi`, `iagentshub/iAgents`, …). Older docs call the
+backend `backend/` and the orchestrator `iagentshub/`; those names are retired
+and GitHub will not give them back.
 
 **No change is atomic across repos.** A contract change means separate commits
 in separate repos that land at different times. **Backend first, always** — it
@@ -27,20 +34,25 @@ Each clone has its own `main`, its own CI, and its own remote under
 
 Run these from inside the relevant clone, not from this folder.
 
-### backend
+### backend_fastapi
 
 ```bash
-.venv/Scripts/python.exe -m pytest tests/ -q       # full suite, 12-15 min
-.venv/Scripts/python.exe -m pytest tests/api/test_routes_auth.py -q
-.venv/Scripts/python.exe -m pytest tests/api/test_x.py::test_y -q
-ruff check .                                       # ruff is on PATH, not in .venv
+python3.11 rtests.py                               # full suite, ~4 min (1944 tests)
+python3.11 -m pytest tests/api/test_routes_auth.py -q
+python3.11 -m pytest tests/api/test_x.py::test_y -q
+ruff check .
 ruff check . --fix
-python main.py                                     # dev server, port 8765
+python3.11 main.py                                 # dev server, port 8765
 ```
 
-Pre-commit runs ruff plus three structural guards (`test_contrato_rutas`,
-`test_guest_boundary`, `test_json_body`) — 20 s, not the full suite. CI runs
-everything on push and PR. The guards are there to catch the API surface
+**Use the 3.11 interpreter explicitly.** There is no `.venv` here; on macOS
+plain `python3` resolves to Xcode's 3.9 and every test fails on import. The
+absolute path is `/opt/homebrew/bin/python3.11`. `rtests.py` is the entry point
+that passes the flags `pytest.ini` expects (`--timeout=30`).
+
+Pre-commit runs ruff plus three structural guards (`tests/api/test_contrato_rutas.py`,
+`tests/api/test_guest_boundary.py`, `tests/utils/test_json_body.py`) — 20 s, not
+the full suite. CI runs everything on push and PR. The guards are there to catch the API surface
 drifting silently: a route vanishing, an endpoint changing guard, a handler
 going back to raw `request.json()`.
 
@@ -107,6 +119,9 @@ flutter test test/backend_url_test.dart
 flutter analyze          # exits non-zero on infos, so `analyze && test` short-circuits
 ```
 
+`app_flutter/CLAUDE.md` holds the conventions of that repo (state, listings,
+i18n, file-size limits). What follows is only what a cross-repo change needs.
+
 Three tests here assert facts about the tree rather than behaviour, so they
 fail on files you may not think you touched:
 
@@ -129,11 +144,19 @@ npm run lint
 Tests import from `../url`, never `../auth`: `auth.ts` imports `vscode`, which
 does not exist outside an extension host.
 
-### iagentshub
+### iAgents
 
-No test suite. Pre-commit runs shellcheck on `install.sh`, `docker compose
-config`, `py_compile` on `gaia.py`, and a BOM check on `install.ps1`. CI adds
-PSScriptAnalyzer and ruff.
+```bash
+python3.11 rtests.py          # 26 tests, ~2 s
+```
+
+`tests/test_structure.py` checks the project layout, `test_gaia_cli.py` the
+CLI, and `test_backend.py` reaches into the backend clone — `BACKEND_DIR`
+overrides its location, default `../backend_fastapi`.
+
+Pre-commit runs shellcheck on `install.sh`, `docker compose config`,
+`py_compile` on `gaia.py`, a BOM check on `install.ps1`, and the byte-for-byte
+comparison of this file against the root copy. CI adds PSScriptAnalyzer and ruff.
 
 **`install.ps1` must keep its UTF-8 BOM.** Without it, Windows PowerShell 5.1
 — the default shell on Windows — reads the file as ANSI, mangles the box-
@@ -166,7 +189,9 @@ consent is required but cannot be evidenced after the fact.
 
 ### Authorization is four dependencies
 
-`app/api/routes/auth.py` exports the entire authorization surface:
+`app/api/routes/auth/dependencies.py` defines the entire authorization surface,
+re-exported from the `auth` package (it is a package now, not a module — import
+from `app.api.routes.auth`, which is what ~18 files already do):
 
 ```python
 require_auth          = require_role("standard")        # normal endpoint
@@ -187,22 +212,20 @@ endpoints open to guest sessions. Do not widen it back.
 
 ### Request bodies
 
-Two styles coexist: **43 handlers parse JSON by hand, 23 take a pydantic
-model** (`agent_builder`, `agents`, `centinel`, `logs`, `resource_linking`,
-`resource_management`, `settings`, `skill_builder`, `social`). Pydantic is the
-better one and newer code is drifting toward it — prefer it for a new endpoint.
+**The migration to pydantic is done: not one handler parses JSON by hand.**
+This used to be 43 hand-parsed against 23 with a model. Declare a model for a
+new endpoint that takes a body; there is no second style to choose from.
 
-Where you do parse by hand, always go through `app.utils.net.json_body(request)`,
-never `await request.json()` — it guarantees the body is an object and returns
-400 instead of a 500 when someone posts `[]`. A test walks `app/api/routes/`
-and fails if a raw `request.json()` reappears.
+`app.utils.net.json_body(request)` was the intermediate step — it guarantees
+the body is an object and returns 400 instead of a 500 when someone posts `[]`.
+It now has **no callers left**, but the helper and its guard stay:
+`tests/utils/test_json_body.py::test_ningun_handler_se_saltó_el_helper` walks
+`app/api/routes/` and fails if a raw `await request.json()` reappears anywhere.
+If you ever do need to parse by hand, that is the function to call.
 
-Because most bodies are still hand-parsed, **the OpenAPI schema does not
-describe request fields for those routes**. Generating client types from it
-today would produce empty signatures for two thirds of the surface.
-`tests/api/contrato_rutas.txt` freezes what the schema *can* honestly assert:
-the set of `METHOD /path`. Every handler converted to pydantic moves codegen
-closer to being worth doing.
+`tests/api/contrato_rutas.txt` freezes the set of `METHOD /path`, which is the
+one thing that must not drift silently. After deliberately adding or removing a
+route, regenerate it with the command above.
 
 ### Chat streaming
 
@@ -257,16 +280,16 @@ where 403 was expected — and only in a full-suite run.
 `licenses_mod`). **Add yours when you introduce another.** In test files,
 prefer the `tmp_data_dir` fixture over importing `DATA_DIR`.
 
-This is why **131 imports sit inside functions rather than at module top**, and
+This is why **~80 imports sit inside functions rather than at module top**, and
 why you should not "tidy" them without checking which kind each one is:
 
-- **`app.config.data` / `app.config.session`** (27 of them) — paths and config
-  the tests rewrite. These must stay deferred.
-- **Everything else** — habit. They are not breaking cycles: the whole package
-  has **4 real cycles in 105 modules**, three of which are `models.agent` with
-  its subclasses. `storage.py` alone had 31 deferred imports of
-  `app.storage.db`, which does not reach `storage.py` at all; they are now at
-  the top.
+- **`app.config.data` / `app.config.session`** — paths and config the tests
+  rewrite. These must stay deferred.
+- **Everything else** — habit. They are not breaking cycles: across **190 files
+  in `app/`** the package has **3 real cycles**, all of them `models.agent` with
+  its subclasses, and `tests/test_ciclos_de_import.py` freezes exactly those
+  three. `storage.py` alone had 31 deferred imports of `app.storage.db`, which
+  does not reach `storage.py` at all; they are now at the top.
 
 A mutable value needs a third treatment: `storage.py` reads `_db.IS_PG` through
 the module rather than importing the name, so `monkeypatch.setattr(db, "IS_PG",
@@ -314,9 +337,24 @@ production. `GAIA_REGISTRATION` is `open | closed | invite` (all three are
 implemented; the single source is `app/config/session.py:REGISTRATION_MODES`).
 `GAIA_MAX_GUEST_SESSIONS=0` disables guest access entirely.
 
-Its versioned copy lives at `iagentshub/CLAUDE.md`; a pre-commit hook there
-compares them byte for byte, because Claude Code loads this one from the
-working-folder root and that root is not a repo.
+**What it means for a variable to be missing is decided in one place**:
+`app/config/startup_checks.py`. Each module still reads its own environment;
+the audit interprets the result. `_lifespan` runs it before `init_db` and logs
+which feature is disabled and because of which variable. Two levels — *warning*
+when configuration is absent and a feature switches off (may well be
+deliberate), *error* when the configuration contradicts itself (email
+verification on with no SMTP, billing on with no Stripe keys, a typo in
+`GAIA_REGISTRATION`). Errors do not abort unless `GAIA_STRICT_CONFIG=true`;
+leaving a degraded-but-running install unable to start is the worse failure.
+The report is at `GET /api/admin/config-audit` and in the Flutter admin panel,
+names only, never values. **Add a check when you add a variable that turns a
+feature on or off** — otherwise it goes back to failing silently.
+
+This file has to exist in **two places**: `all_iagenthub/CLAUDE.md` (the
+working-folder root, which Claude Code loads and which is not a repo) and
+`iAgents/CLAUDE.md` (the versioned copy). A pre-commit hook in `iAgents`
+compares them byte for byte. It skips silently when the root copy is missing —
+if you delete it, the two drift and nothing says so.
 
 ## Decisions already taken
 
@@ -324,10 +362,11 @@ The remediation backlog that used to live in `iagentshub/SANEAMIENTO.md` is
 gone; git history holds what was done. These three are the only entries that
 were still live, and each one costs something real to rediscover:
 
-- **There are two `hub.db` and nobody has confirmed which install is the live
-  one.** `iAgents/data/hub.db` was the more recently modified and holds more
-  users and agents than `iagentshub/data/hub.db`, which is the opposite of what
-  you would assume from the directory names. **Confirm before deleting either.**
+- **There is exactly one `hub.db`, at `iAgents/data/hub.db`.** This entry used
+  to warn about a second copy under a separate orchestrator directory; that
+  directory no longer exists here, so the ambiguity is gone. Still confirm with
+  `find . -name hub.db` before deleting a database — the warning existed because
+  the directory names suggested the opposite of the truth.
 - **Sections a guest cannot use are hidden in the client, never opened in the
   backend.** `_visibleMainItems(role)` drops `workflows` from the Flutter
   navigation catalogue for `role == 'guest'`. The fix for "the guest sees a
