@@ -164,6 +164,11 @@ services:
       # open | closed | invite. Mismo default que hub y backend: cerrado salvo
       # que .env diga otra cosa (.env.example lo pone en invite).
       GAIA_REGISTRATION: "${GAIA_REGISTRATION:-closed}"
+      # Anti-CSRF: enforce (rechaza) | log (solo registra) | off (no mira).
+      # El del token exige que el cliente mande X-CSRF-Token: si actualizas el
+      # backend antes que el frontend, bájalo a "log" hasta que cuadren.
+      GAIA_CSRF_ORIGIN_CHECK: "${GAIA_CSRF_ORIGIN_CHECK:-enforce}"
+      GAIA_CSRF_TOKEN_CHECK: "${GAIA_CSRF_TOKEN_CHECK:-enforce}"
       # false → usuarios auto-verificados; true → envía correo de verificación
       GAIA_EMAIL_VERIFY: "false"
       # ── SMTP (verificación de email y recuperación de contraseña) ────────────

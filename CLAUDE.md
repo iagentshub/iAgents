@@ -230,6 +230,32 @@ asserts both sides of the line.
 `require_auth` used to alias the `guest` rank, which left ~140 private
 endpoints open to guest sessions. Do not widen it back.
 
+### The session is two cookies
+
+`ga_token` (the JWT, `HttpOnly`) and `ga_csrf` (readable by JS). They are
+emitted and cleared together by `set_session_cookies` / `clear_session_cookies`
+in `app/auth/cookies.py`. **A handler that opens a session calls that helper**
+— the `set_cookie` block used to be copied in eight places, and a ninth that
+forgets `ga_csrf` breaks nothing visible, it just switches the check off.
+
+`CsrfMiddleware` puts two layers behind `SameSite=Lax`, which was the only
+defence and does not cover a compromised subdomain — for the browser that is
+"the same site". Both take `enforce | log | off`:
+
+- `GAIA_CSRF_ORIGIN_CHECK` (default `enforce`) — `Origin`/`Referer` on unsafe
+  methods, checked against `CORS_ORIGINS` **and** the request's own host.
+- `GAIA_CSRF_TOKEN_CHECK` (default `enforce`) — `X-CSRF-Token` must equal
+  `HMAC(secret, ga_token)`. This one needs the clients, so it inverts the
+  usual rule: **the backend must not reach production before React and
+  Flutter**. A cached bundle that does not send the header 403s on every
+  mutation; `log` is the escape hatch and takes no redeploy, just the env var.
+
+Two exemptions, both load-bearing: `Authorization: Bearer` skips everything (a
+PAT is not an ambient credential — this is what keeps the VS Code extension
+working), and a request with no `Origin` **and** no `Referer` passes layer 1
+(Flutter native, the Stripe webhook, curl — a browser cannot be made to omit
+`Origin` on a POST). Ver `docs/adr/006-csrf-en-dos-capas.md`.
+
 ### Request bodies
 
 **The migration to pydantic is done: not one handler parses JSON by hand.**
