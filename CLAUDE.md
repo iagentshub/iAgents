@@ -133,6 +133,16 @@ fail on files you may not think you touched:
   deliberate; the test only chases the concatenation.
 - `backend_url_test.dart` — shares its case table with `vs_code/src/test/
   url.test.ts`. Change one, change both.
+- `deferred_routes_test.dart` — admin, Centinel, metadata, workflows and
+  checkout are imported `deferred as` in `lib/app/router/internal_router.dart`
+  and mounted through `DeferredPage`, which keeps 777 KB out of the initial web
+  bundle. **Only the router may import those five files.** A plain `import`
+  anywhere else pulls their code back into the main bundle and nothing visible
+  breaks — this test is what notices. A heavy new screen goes in deferred too.
+
+CI runs one more gate that `flutter test` cannot: `tool/check_web_bundle_size.sh`
+after `flutter build web --release`. It fails if `main.dart.js` crosses the budget
+written in the script, or if the build produced no deferred parts at all.
 
 ### vs_code
 
