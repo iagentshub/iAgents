@@ -44,6 +44,7 @@ services:
       GAIA_ADMIN_USERNAME:       "${GAIA_ADMIN_USERNAME:-admin}"
       GAIA_ADMIN_EMAIL:          "${GAIA_ADMIN_EMAIL:-admin@localhost.com}"
       GAIA_ADMIN_RESET:          "${GAIA_ADMIN_RESET:-}"
+      GAIA_STRICT_CONFIG:        "${GAIA_STRICT_CONFIG:-false}"
       GAIA_REGISTRATION:         "${GAIA_REGISTRATION:-closed}"
       GAIA_EMAIL_VERIFY:         "${GAIA_EMAIL_VERIFY:-false}"
       GAIA_SMTP_HOST:            "${GAIA_SMTP_HOST:-}"

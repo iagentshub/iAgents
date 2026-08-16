@@ -157,6 +157,10 @@ services:
       GAIA_ADMIN_USERNAME: "admin"
       # Pon "true" para resetear la contraseña del admin en el próximo arranque (quitar después)
       GAIA_ADMIN_RESET: ""
+      # true → una configuración contradictoria (verificación de email sin
+      # SMTP, cobro activo sin claves de Stripe) impide arrancar en vez de
+      # degradarse en silencio. Ver docs/es/config.md.
+      GAIA_STRICT_CONFIG: "${GAIA_STRICT_CONFIG:-false}"
       # open | closed | invite. Mismo default que hub y backend: cerrado salvo
       # que .env diga otra cosa (.env.example lo pone en invite).
       GAIA_REGISTRATION: "${GAIA_REGISTRATION:-closed}"
