@@ -37,7 +37,7 @@ Run these from inside the relevant clone, not from this folder.
 ### backend_fastapi
 
 ```bash
-python3.11 rtests.py                               # full suite, ~4 min (1944 tests)
+python3.11 rtests.py                               # full suite, ~4 min (1954 tests)
 python3.11 -m pytest tests/api/test_routes_auth.py -q
 python3.11 -m pytest tests/api/test_x.py::test_y -q
 ruff check .
