@@ -260,13 +260,39 @@ asserts both sides of the line.
 `require_auth` used to alias the `guest` rank, which left ~140 private
 endpoints open to guest sessions. Do not widen it back.
 
-### The session is two cookies
+### The session is three cookies and a row in the database
 
-`ga_token` (the JWT, `HttpOnly`) and `ga_csrf` (readable by JS). They are
-emitted and cleared together by `set_session_cookies` / `clear_session_cookies`
-in `app/auth/cookies.py`. **A handler that opens a session calls that helper**
-— the `set_cookie` block used to be copied in eight places, and a ninth that
-forgets `ga_csrf` breaks nothing visible, it just switches the check off.
+`ga_token` (the access JWT, `HttpOnly`), `ga_csrf` (readable by JS) and
+`ga_refresh` (`HttpOnly`, scoped to `path=/api/auth`). They are emitted and
+cleared together by `set_session_cookies` / `clear_session_cookies` in
+`app/auth/cookies.py` — but **a handler that opens a session calls
+`app.auth.sessions.open_session`**, which also writes the row that makes the
+session revocable. Eight emitters across four modules go through it; one that
+skipped the row would mint a token no logout can revoke, and nothing visible
+would fail.
+
+The access token carries a `sid` claim and **is not self-sufficient**:
+`_assert_session_live()` queries the `sessions` table on every authenticated
+cookie request, deliberately without a cache — caching the revoked state would
+give back exactly the delay this removes, and with several workers a logout
+would only apply in the worker that served it. `GAIA_ACCESS_EXPIRE_MINUTES`
+(30) measures the access; `GAIA_JWT_EXPIRE_HOURS` (12) keeps its name but now
+measures the **session**, and rotation pushes that deadline forward, so it is
+hours of inactivity rather than since login.
+
+`POST /api/auth/refresh` rotates the refresh token and keeps the previous hash
+in `prev_refresh_hash`: presenting an already-rotated one means two clients
+hold it, and the whole session is revoked. **A client that renews needs a lock**
+— Flutter's `ApiClient` has one; without it six in-flight 401s fire six
+renewals and the second arrives with a rotated token, which reads as theft.
+
+Revocation happens on logout, `DELETE /api/auth/sessions[/{id}]`, password
+change (from `_touch_password_changed_at` — `password_changed_at` alone never
+touched the refresh), account deactivation, refresh reuse and GDPR deletion.
+**A role change does not revoke**, on purpose: the role is read from the user
+row on every request anyway. Changing group reissues the access with the same
+`sid` (`reissue_access`), so it does not pile up rows. Ver
+`docs/adr/008-sesiones-revocables.md`.
 
 `CsrfMiddleware` puts two layers behind `SameSite=Lax`, which was the only
 defence and does not cover a compromised subdomain — for the browser that is
