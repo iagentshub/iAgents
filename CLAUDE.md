@@ -37,7 +37,7 @@ Run these from inside the relevant clone, not from this folder.
 ### backend_fastapi
 
 ```bash
-python3.11 rtests.py                               # full suite, ~4 min (1954 tests)
+python3.11 rtests.py                               # full suite, ~4 min (1998 tests)
 python3.11 -m pytest tests/api/test_routes_auth.py -q
 python3.11 -m pytest tests/api/test_x.py::test_y -q
 ruff check .
@@ -343,7 +343,7 @@ sql("queries/agents:get_any")  # the `-- name: get_any` section
 The schema is **one file per table** (36 of them, indexes alongside), because
 consumers want a single table — `flog` creates `app_logs` before `init_db` and
 used to carve it out of the full DDL by substring. Queries are **grouped per
-module with sections** (42 files, 440 sections); a file per statement would be
+module with sections** (43 files, 457 sections); a file per statement would be
 six hundred files. `schema.py` keeps only what isn't SQL: the ordered table
 list (foreign keys) and the per-dialect marker table. `SCHEMA_SQLITE` and
 `SCHEMA_PG` still exist with the same value.
@@ -374,11 +374,42 @@ to read the `.sql` files.
 
 `tests/storage/test_sql_contra_motores.py` *prepares* every query against a
 real schema, which validates syntax, tables and columns without executing
-anything. SQLite always runs (428 of the 440 sections). PostgreSQL needs
+anything. SQLite always runs (445 of the 457 sections). PostgreSQL needs
 `GAIA_TEST_PG_DSN` and skips without it — **until someone runs it against a
 real database, those 12 PostgreSQL-only queries have never been tried**.
 
 Ver `docs/adr/007-sql-en-ficheros.md`.
+
+### The two sides of GDPR read the same table list
+
+Deletion is `app/sql/queries/gdpr.sql` (25 `DELETE`s, run by
+`purge_user_data`); export is `queries/gdpr_export.sql` (15 files in the ZIP,
+built by `app/services/gdpr.py`). **A new resource has to reach both**, and no
+table declares `REFERENCES users`, so the database drags nothing along behind
+you: prompts, tools, memory and packs each got added without going back to the
+deletion routine, and users who exercised their right to erasure left their rows
+behind with an `owner_id` pointing at nobody.
+
+`tests/auth/test_gdpr_cobertura.py` is what closes that — it reads
+`app/sql/schema/*.sql`, takes every table whose column ends in `owner_id`
+(`resource_source_links` calls its own `resource_owner_id`) and fails if one is
+missing from a `DELETE`, filtered by the wrong column, or deleted but never
+exported. Two tables are out on purpose and named in `EXCLUIDAS` with the reason;
+add yours there rather than widening the guard. **Tables keyed by `username`
+instead — `personal_access_tokens`, `vscode_auth_codes`,
+`user_agent_preferences`, `subscriptions` — are still outside all of this.**
+
+Migration 28 (`gdpr_orphan_resources`, both dialects) cleans up the rows left
+behind by installs that ran the old routine. It is the only destructive
+migration in the registry: it skips `__public__` and `admin` — neither is an
+account, so neither is ever in `users` — and does nothing at all when `users` is
+empty, where "not in users" is true of everything.
+
+`_purge_user_files()` in `app/auth/gdpr.py` is **not** the deletion that
+matters. Agents and skills live in their tables; that function only reaches the
+`config.json` files that the file→DB migration copied and never removed. Export
+used to read from there, which is why it shipped a well-formed ZIP with the two
+central resources as empty lists and no error anywhere.
 
 ### Rate limiting
 
