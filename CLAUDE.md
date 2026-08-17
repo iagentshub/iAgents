@@ -299,6 +299,57 @@ not.
 Rows are largely JSON blobs, so querying by an inner field means parsing JSON
 in Python. Known debt, deliberate.
 
+### The SQL lives in files, not in string literals
+
+**Static SQL goes in `app/sql/` and the code asks for it by identifier.** There
+is no second style: `tests/storage/test_sql_en_ficheros.py` walks `app/` and
+fails if a constant `SELECT`/`INSERT`/… reaches a database call again.
+
+```python
+sql("schema/agents")           # app/sql/schema/agents.sql, whole file
+sql("queries/agents:get_any")  # the `-- name: get_any` section
+```
+
+The schema is **one file per table** (36 of them, indexes alongside), because
+consumers want a single table — `flog` creates `app_logs` before `init_db` and
+used to carve it out of the full DDL by substring. Queries are **grouped per
+module with sections** (42 files, 440 sections); a file per statement would be
+six hundred files. `schema.py` keeps only what isn't SQL: the ordered table
+list (foreign keys) and the per-dialect marker table. `SCHEMA_SQLITE` and
+`SCHEMA_PG` still exist with the same value.
+
+Three things stay in Python **on purpose**: the ~66 queries built at runtime
+(optional filters, variable-length `IN`, table as a parameter), the `PRAGMA`s
+in `db.py`, and `storage/migrations/` — a historical sequence whose SQL is
+interleaved with the Python that transforms the data. The migration duplication
+between `sqlite.py` and `postgres.py` is still open.
+
+**A query that only works on one engine declares it** with `-- engine: pg` or
+`-- engine: sqlite` under its name; the loader strips that line so it never
+reaches the database. The two dialect variants of one operation stay **next to
+each other in their domain's file** — splitting them into per-engine
+directories is how a column gets added to one and forgotten in the other, which
+is the original bug behind this whole item.
+
+The failure mode moved: a typo in an identifier is no longer a visible SQL
+syntax error but a `LookupError` on the branch that runs it — and some branches
+only run on PostgreSQL. The guards cover all five ways that happens: SQL back in
+Python, an identifier that doesn't resolve, a section nobody uses, dialect
+syntax with no `-- engine:` declared (or one that contradicts it), and a
+single-engine query used outside its `IS_PG` branch. Classification goes by the
+query's **syntax**, not by whether the name ends in `_pg` — the convention is
+exactly what gets forgotten. **Any test that greps the Python
+for a table name now has a blind spot** — `test_schema_usage.py` had to learn
+to read the `.sql` files.
+
+`tests/storage/test_sql_contra_motores.py` *prepares* every query against a
+real schema, which validates syntax, tables and columns without executing
+anything. SQLite always runs (428 of the 440 sections). PostgreSQL needs
+`GAIA_TEST_PG_DSN` and skips without it — **until someone runs it against a
+real database, those 12 PostgreSQL-only queries have never been tried**.
+
+Ver `docs/adr/007-sql-en-ficheros.md`.
+
 ### Rate limiting
 
 `RateLimiter` is a FastAPI dependency with a per-process sliding window.
