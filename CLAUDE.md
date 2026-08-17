@@ -167,7 +167,7 @@ does not exist outside an extension host.
 ### iAgents
 
 ```bash
-python3.11 rtests.py          # 26 tests, ~2 s
+python3.11 rtests.py          # 40 tests, ~2 s
 ```
 
 `tests/test_structure.py` checks the project layout, `test_gaia_cli.py` the
@@ -206,6 +206,36 @@ consent. Flutter reaches them with `resolvePublicSiteUri`, not GoRouter: they
 live at the origin root, outside `/app/`, so it is browser navigation. Note
 the backend still stores neither the date nor the version accepted, so today
 consent is required but cannot be evidenced after the fact.
+
+### Two images, and only one of them ships
+
+`ghcr.io/iagentshub/app` is what `install.sh` pulls, built from
+`iAgents/docker/Dockerfile.unified` by **three** workflows — `iAgents`,
+`backend_fastapi` and `app_flutter` — each with its own "Preparar contexto de
+build" step — plus `gaia build-push`, which builds the same image from the
+command line. `ghcr.io/iagentshub/backend` is the standalone backend and almost
+nobody runs it. **A change to how the backend is packaged has to land in both.**
+The unified image installed from `requirements.txt` for a long time while the
+standalone used `requirements.lock` with `--require-hashes`: the image that
+actually reaches production had the weaker supply-chain guarantee, and nothing
+failed.
+
+Docker only reads the `.dockerignore` at the **root of the build context**, and
+that root is `build-ctx/`, not the backend clone — so `backend_fastapi/.dockerignore`
+does not apply to the unified build. The unified image has its own, versioned at
+`iAgents/docker/dockerignore.unified`, which every workflow copies in.
+
+Both ignore files are **allowlists**. Otherwise `COPY . .` and `COPY backend/`
+carry `tests/` (14 MB, more than `app/`), `docs/` and the checkout's `.git` into
+the published image; the code layer changes on every build, so that weight is
+re-downloaded by every install on every update. The backend needs exactly `app/`,
+`main.py`, `requirements.lock` and — standalone only — `docker-entrypoint.sh`;
+under the unified image supervisord runs `python /app/main.py` directly.
+
+`tests/test_docker_contexto.py` in `iAgents` fails if a workflow — or
+`build_push.py` — prepares a context without copying the ignore, or if the
+Dockerfile goes back to `requirements.txt`. It reaches the sibling clones the way `test_backend.py` does
+and skips the ones that are not there.
 
 ### Authorization is four dependencies
 

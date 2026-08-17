@@ -145,6 +145,13 @@ def _push_react(image_repository: str, tag: str) -> str:
             IAGENTS_DIR / "docker" / "entrypoint-unified.sh",
             tmpdir / "entrypoint-unified.sh",
         )
+        # `_copy_git_tree` deja fuera lo no trackeado, pero tests/ y docs/ sí lo
+        # están: son 14 MB que acababan en la imagen publicada. Docker solo lee
+        # el .dockerignore de la raíz del contexto, y esa raíz es este tmpdir,
+        # no el clon del backend, así que hay que traerlo aquí.
+        shutil.copy2(
+            IAGENTS_DIR / "docker" / "dockerignore.unified", tmpdir / ".dockerignore"
+        )
 
         info(
             f"Construyendo imagen multi-plataforma (linux/amd64, linux/arm64) → {unified_img}"

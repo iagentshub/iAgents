@@ -191,11 +191,11 @@ def cmd_status(compose: list[str]) -> None:
     subprocess.run(compose + ["ps"], check=False)
 
 
-def cmd_reset(compose: list[str], dev: bool, hub: bool, yes: bool) -> None:
+def cmd_reset(compose: list[str], dev: bool, hub: bool) -> None:
     check_docker()
     ensure_env()
     _confirm_destructive(
-        "los volúmenes Docker (base de datos, código clonado por code-sync)", yes
+        "los volúmenes Docker (base de datos, código clonado por code-sync)"
     )
     env = os.environ.copy()
     inject_github_token(env)

@@ -20,7 +20,10 @@ FRONTEND_PID_FILE = LOCAL_DIR / "frontend.pid"
 BACKEND_LOG = LOCAL_DIR / "backend.log"
 FRONTEND_LOG = LOCAL_DIR / "frontend.log"
 VENV_DIR = IAGENTS_DIR / ".venv"
-DATA_DIR = REPOS_ROOT / "iagentshub" / "data"
+# Los datos viven dentro de este clon, no en un directorio hermano: apuntaba a
+# ../iagentshub/data/ — el nombre retirado del orquestador —, así que el modo
+# --local creaba una BD vacía en un directorio fantasma en vez de usar la real.
+DATA_DIR = IAGENTS_DIR / "data"
 ENV_FILE = IAGENTS_DIR / ".env"
 
 

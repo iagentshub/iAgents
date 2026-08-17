@@ -119,7 +119,7 @@ def init_local_data() -> None:
         secret = secrets.token_hex(32)
         settings_file.write_text(f'{{"jwt_secret":"{secret}"}}\n', encoding="utf-8")
         info("settings.json creado con secret aleatorio.")
-    info("Directorio de datos listo: ../iagentshub/data/")
+    info("Directorio de datos listo: iAgents/data/")
 
 
 def _pid_alive(pid: int) -> bool:
@@ -232,7 +232,7 @@ def _local_show_info(
                 f"{BOLD}  ║{RESET}  Contraseña › (ver logs: python3 gaia.py logs --local)"
             )
         print(
-            f"{BOLD}  ║{RESET}  Base datos › {YELLOW}SQLite — ../iagentshub/data/hub.db{RESET}"
+            f"{BOLD}  ║{RESET}  Base datos › {YELLOW}SQLite — iAgents/data/hub.db{RESET}"
         )
     elif backend_url:
         print(f"{BOLD}  ║{RESET}  API remota › {CYAN}{backend_url}{RESET}")
@@ -419,10 +419,10 @@ def cmd_local_status() -> None:
     print()
 
 
-def cmd_local_reset(yes: bool) -> None:
+def cmd_local_reset() -> None:
     component = _local_component()
     if component in {"full", "backend"}:
-        _confirm_destructive("el directorio de datos local (../iagentshub/data/)", yes)
+        _confirm_destructive("el directorio de datos local (iAgents/data/)")
     cmd_local_stop()
     if component in {"full", "backend"} and DATA_DIR.exists():
         shutil.rmtree(DATA_DIR)

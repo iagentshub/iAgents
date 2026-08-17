@@ -134,13 +134,13 @@ En producción, CI publica la imagen unificada React con el tag `:latest` y un t
 
 ## Instalación desde cero (`reset`)
 
-Borra por completo la base de datos (usuarios, agentes, skills, conexiones cifradas, chats, memoria) y reinstala desde cero. Es **irreversible** — el script pide escribir `RESET` para confirmar, salvo que se pase `--yes` (útil en scripts, pero úsalo con cuidado: no distingue entornos).
+Borra por completo la base de datos (usuarios, agentes, skills, conexiones cifradas, chats, memoria) y reinstala desde cero. Es **irreversible** — el script pide escribir `RESET` para confirmar y no hay forma de omitirlo: fuera de un terminal (CI, `cron`, una tubería) el comando aborta sin tocar nada. `reset` no está pensado para automatizarse.
 
 ```bash
 python3 gaia.py reset            # Docker: docker compose down -v + start (borra todos los volúmenes)
 python3 gaia.py reset --dev      # igual, en modo desarrollo
 python3 gaia.py reset --hub      # igual, en modo Hub
-python3 gaia.py reset --local    # borra ../iagentshub/data/ y reinstala
+python3 gaia.py reset --local    # borra iAgents/data/ y reinstala
 ```
 
 > ⚠️ El compose por defecto (sin flags) es el que usa un despliegue en producción típico. Ejecutar `reset` ahí borra los datos reales — verifica en qué servidor/directorio estás antes de confirmar.

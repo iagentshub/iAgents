@@ -48,12 +48,17 @@ def error(msg: str) -> None:
     sys.exit(1)
 
 
-def _confirm_destructive(scope_desc: str, yes: bool) -> None:
+def _confirm_destructive(scope_desc: str) -> None:
     """Exige confirmación explícita antes de un borrado irreversible.
 
     El compose por defecto (sin --dev/--hub/--local) es el que usa el
     despliegue en producción — un 'reset' accidental ahí destruye datos
     reales, así que no basta con un simple aviso.
+
+    No hay forma de saltarse esto. Existió un --yes «para scripts/CI» que
+    nunca tuvo un solo llamador: solo servía para desactivar, desde la ayuda
+    que se lee justo antes de escribir el comando, la única protección de un
+    borrado irreversible.
     """
     print()
     warn("╔══════════════════════════════════════════════════════════════╗")
@@ -67,13 +72,8 @@ def _confirm_destructive(scope_desc: str, yes: bool) -> None:
     warn("  • Todo el historial de chats, memoria y contadores de tokens")
     warn("  • La configuración (settings.json, secret JWT)")
     print()
-    if yes:
-        warn("--yes indicado: continuando sin confirmación interactiva.")
-        return
     if not sys.stdin.isatty():
-        error(
-            "Entrada no interactiva: repite el comando con --yes para confirmar el borrado."
-        )
+        error("Entrada no interactiva: 'reset' solo se confirma desde un terminal.")
     resp = input(f"{BOLD}Escribe RESET para confirmar: {RESET}").strip()
     if resp != "RESET":
         error("Confirmación no recibida. Abortando sin cambios.")

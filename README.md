@@ -86,10 +86,10 @@ python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)
 python3 gaia.py push                # construir y subir la imagen React :latest
 
 python3 gaia.py reset                     # borra la BD y TODOS los volúmenes, reinstala desde cero
-python3 gaia.py reset --local             # borra ../iagentshub/data/ y reinstala desde cero
+python3 gaia.py reset --local             # borra iAgents/data/ y reinstala desde cero
 ```
 
-> ⚠️ `reset` es **irreversible**: borra usuarios, agentes, skills, conexiones y todo el historial. Pide confirmación escrita (`RESET`) salvo que se pase `--yes`.
+> ⚠️ `reset` es **irreversible**: borra usuarios, agentes, skills, conexiones y todo el historial. Pide confirmación escrita (`RESET`) desde un terminal, y no hay forma de omitirla.
 
 ---
 

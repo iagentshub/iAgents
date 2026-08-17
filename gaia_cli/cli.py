@@ -35,10 +35,11 @@ def _print_local_usage() -> None:
     print("  restart  Detiene y vuelve a arrancar los servicios locales")
     print("  logs     Muestra los logs en tiempo real")
     print("  status   Estado de los procesos locales")
-    print("  reset    Borra ../iagentshub/data/ (BD y config) y reinstala desde cero")
+    print("  reset    Borra iAgents/data/ (BD y config) y reinstala desde cero")
+    print("           Pide escribir RESET para confirmar; no se puede omitir")
     print()
     print(
-        f"  {YELLOW}Base de datos: SQLite en ../iagentshub/data/hub.db  (con persistencia){RESET}"
+        f"  {YELLOW}Base de datos: SQLite en iAgents/data/hub.db  (con persistencia){RESET}"
     )
     print(f"  {YELLOW}Sin PostgreSQL ni contenedores Docker.{RESET}")
     print(f"  {YELLOW}Frontend React servido desde ../frontend_react/dist.{RESET}")
@@ -59,9 +60,8 @@ def _print_docker_usage() -> None:
     print(
         "  push     Construye imágenes y las sube a GHCR  (requiere --hub o sin flag)"
     )
-    print(
-        "  reset    Borra la BD y TODOS los volúmenes, y reinstala desde cero (pide confirmación)"
-    )
+    print("  reset    Borra la BD y TODOS los volúmenes, y reinstala desde cero")
+    print("           Pide escribir RESET para confirmar; no se puede omitir")
     print()
     print(f"{BOLD}Flags:{RESET}")
     print(
@@ -72,9 +72,6 @@ def _print_docker_usage() -> None:
     )
     print(
         "  --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)"
-    )
-    print(
-        "  --yes              Omite la confirmación interactiva de 'reset' (para scripts/CI)"
     )
     print()
     print(f"{BOLD}Flujo recomendado para despliegues rápidos (--hub):{RESET}")
@@ -92,7 +89,7 @@ def _print_docker_usage() -> None:
 
 
 def main() -> None:
-    dev = local = hub = help_mode = yes = False
+    dev = local = hub = help_mode = False
     positional: list[str] = []
 
     for arg in sys.argv[1:]:
@@ -102,8 +99,6 @@ def main() -> None:
             local = True
         elif arg == "--hub":
             hub = True
-        elif arg == "--yes":
-            yes = True
         elif arg in ("-h", "--help", "help"):
             help_mode = True
         else:
@@ -133,7 +128,7 @@ def main() -> None:
         elif command == "status":
             cmd_local_status()
         elif command == "reset":
-            cmd_local_reset(yes)
+            cmd_local_reset()
         else:
             error(
                 f"Comando desconocido: {command}. Usa: python3 gaia.py --help --local"
@@ -175,6 +170,6 @@ def main() -> None:
     elif command == "push":
         cmd_push()
     elif command == "reset":
-        cmd_reset(compose, dev, hub, yes)
+        cmd_reset(compose, dev, hub)
     else:
         error(f"Comando desconocido: {command}. Usa: python3 gaia.py --help")

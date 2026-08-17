@@ -134,13 +134,13 @@ In production, CI publishes the unified React image with `:latest` and an immuta
 
 ## Fresh install (`reset`)
 
-Completely wipes the database (users, agents, skills, encrypted connections, chats, memory) and reinstalls from scratch. This is **irreversible** — the script requires typing `RESET` to confirm, unless `--yes` is passed (useful for scripts, but use with care: it doesn't distinguish environments).
+Completely wipes the database (users, agents, skills, encrypted connections, chats, memory) and reinstalls from scratch. This is **irreversible** — the script requires typing `RESET` to confirm and there is no way to skip it: outside a terminal (CI, `cron`, a pipe) the command aborts without touching anything. `reset` is not meant to be automated.
 
 ```bash
 python3 gaia.py reset            # Docker: docker compose down -v + start (wipes all volumes)
 python3 gaia.py reset --dev      # same, in development mode
 python3 gaia.py reset --hub      # same, in Hub mode
-python3 gaia.py reset --local    # wipes ../iagentshub/data/ and reinstalls
+python3 gaia.py reset --local    # wipes iAgents/data/ and reinstalls
 ```
 
 > ⚠️ The default compose (no flags) is the one a typical production deployment uses. Running `reset` there wipes real data — double-check which server/directory you're in before confirming.

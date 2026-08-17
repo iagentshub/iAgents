@@ -1,0 +1,33 @@
+# Contexto de build de la imagen unificada. Los workflows lo copian a
+# build-ctx/.dockerignore — no se puede reutilizar el de backend_fastapi
+# porque Docker solo lee el que está en la RAÍZ del contexto, y aquí la raíz
+# es build-ctx, no el clon del backend.
+#
+# backend/ va con lista blanca porque es lo único que se copia tal cual a la
+# imagen final: sin esto entraban tests/ (14 MB, más que app/), docs/, el
+# .git del checkout y cualquier fichero suelto del runner. El COPY del código
+# es la última capa y cambia en cada build, así que ese peso lo descargaba
+# entera cada instalación en cada actualización.
+#
+# frontend/ va con lista negra a propósito: solo alimenta el stage de node
+# (npm ci + prerender) y nunca llega a la imagen final, así que enumerar sus
+# fuentes una a una sería mantenimiento a cambio de nada.
+
+backend/*
+!backend/app
+!backend/main.py
+!backend/requirements.lock
+
+# docker-entrypoint.sh del backend NO entra: aquí el proceso lo arranca
+# supervisord con `python /app/main.py` y quien cede /data es
+# entrypoint-unified.sh. En la imagen standalone sí hace falta.
+
+frontend/.git
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store

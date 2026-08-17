@@ -1,16 +1,24 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # iAgents Hub — imagen unificada (backend + frontend en un solo contenedor)
 #
-# El contexto de build lo prepara gaia.sh push — contiene:
-#   backend/   → código Python + requirements.txt
-#   frontend/  → ficheros estáticos + nginx.conf
+# El contexto lo prepara el paso «Preparar contexto de build» de los tres
+# workflows que publican esta imagen (iAgents, backend_fastapi, app_flutter):
+#   backend/      → código Python + requirements.lock
+#   frontend/     → fuentes de React + nginx.conf
+#   flutter-web/  → app autenticada ya compilada
+# Lo que de esos tres directorios entra en el contexto lo decide
+# docker/dockerignore.unified, que los workflows copian como .dockerignore.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Stage 1: dependencias Python ─────────────────────────────────────────────
+# El .lock con --require-hashes, igual que backend_fastapi/Dockerfile. Esto
+# instalaba desde requirements.txt, es decir rangos flotantes resueltos contra
+# lo que hubiera en PyPI el día del build: la imagen que se despliega tenía
+# garantías de suministro más débiles que la standalone, que casi nadie usa.
 FROM python:3.12-slim AS py-builder
 WORKDIR /build
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY backend/requirements.lock .
+RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
 
 # Imagen con Chromium: el build usa `npm run prerender` (build + snapshot HTML
 # de las rutas públicas) para que los buscadores reciban título, descripción y
