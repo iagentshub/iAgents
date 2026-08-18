@@ -406,6 +406,29 @@ real database, those 12 PostgreSQL-only queries have never been tried**.
 
 Ver `docs/adr/007-sql-en-ficheros.md`.
 
+### El grafo se arma en el cliente
+
+Dibujar el grafo de recursos siempre estuvo en un solo sitio
+(`AnimatedResourceGraph`), pero **armarlo** llegó a estar escrito ocho veces:
+cuatro constructores en Dart y cuatro endpoints aquí, con la misma frase «un
+agente usa una skill, un prompt, una tool…» repetida cuatro veces y el recorrido
+de carpetas de un pack, tres. Habían divergido: el mismo agente enseñaba cosas
+distintas según desde qué pantalla se abriera el grafo.
+
+Hoy el backend entrega **relaciones planas** —`app/services/resource_relations.py`,
+único sitio que las construye— y el ensamblado vive en
+`app_flutter/lib/shared/graph/resource_graph_builder.dart`. Los nodos de carpeta
+ya no viajan: el servidor manda el `path` de cada fichero y el árbol lo hace el
+cliente.
+
+El servidor solo participa donde el cliente no puede: el filtro
+`public_dependencies` de un recurso publicado y los recursos ajenos de Admin.
+Tres rutas `…/relations` cubren eso; los cuatro `…/graph` se retiraron, y se
+retiraron **después** de que Flutter migrara — un bundle cacheado que siguiera
+pidiéndolos habría dejado de funcionar. Dos guardas lo sostienen:
+`tests/api/test_grafo_en_un_sitio.py` y, en Flutter,
+`test/feature_architecture_test.dart`. Ver `docs/adr/010-el-grafo-se-arma-en-el-cliente.md`.
+
 ### The two sides of GDPR read the same table list
 
 Deletion is `app/sql/queries/gdpr.sql` (25 `DELETE`s, run by
