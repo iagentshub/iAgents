@@ -439,12 +439,40 @@ central resources as empty lists and no error anywhere.
 
 ### Rate limiting
 
-`RateLimiter` is a FastAPI dependency with a per-process sliding window.
-uvicorn runs `GAIA_WORKERS` processes, so the constructor divides `calls` by
-`app.config.server.WORKERS`. State is in memory and is lost on restart.
+**Every route limiter counts in the database, not in the process.** They are
+built with `shared=True` and a stable `name`, and the counter lives in
+`rate_limit_windows` — so the number written in the code is the cluster's limit
+and it survives a redeploy. Two guards in `tests/test_ratelimit.py` walk
+`app/api/routes/` and fail on a limiter that went back to a per-process counter,
+or on one declared that nobody applies. Four had been sitting there dead since
+their endpoints moved to another module.
+
+The in-memory sliding window still exists for limiters without a stable name —
+the constructor divides `calls` by `app.config.server.WORKERS`, because uvicorn
+runs that many processes. Today only the tests take that path.
+
+**An authenticated endpoint keys by `principal_key`, not by IP.** Behind a
+corporate NAT one IP is the whole office; rotating IPs finds no ceiling. It
+resolves the identity **without touching the database** — the PAT's hash, or the
+already-signed JWT's `sub` — because it runs before the authorization dependency
+and on the chat's hot path. It authorizes nothing: a forged token falls back to
+the IP branch. Auth limiters stay keyed by IP, which is the only identity there
+is before a session exists.
+
+Above the per-user quota sits an IP ceiling `GAIA_RATE_IP_FACTOR` times looser
+(5 by default), because a per-principal key alone hands a full quota to every
+disposable account. At 0 it is off and the startup audit says so.
+
+`_rate_limit_purge_loop` in `_lifespan` clears expired windows every 6 h; the
+horizon is the longest window registered in the process, not a constant —
+purging with the others' 60 s cutoff would give `auth-forgot`, which is an hour
+long, its quota back.
 
 Every instance registers itself in `ratelimit.INSTANCES`; the test fixture
-clears that list rather than naming limiters one by one.
+clears that list rather than naming limiters one by one. Shared limiters keep
+nothing there — the per-test SQLite file is what isolates them.
+
+Ver `docs/adr/009-cuota-compartida-y-por-principal.md`.
 
 ## The trap that will bite you in backend tests
 
@@ -533,6 +561,22 @@ leaving a degraded-but-running install unable to start is the worse failure.
 The report is at `GET /api/admin/config-audit` and in the Flutter admin panel,
 names only, never values. **Add a check when you add a variable that turns a
 feature on or off** — otherwise it goes back to failing silently.
+
+**The background loops read their cadence from `app/config/maintenance.py`**,
+not from a literal in the loop body: GDPR purge, log purge, rate-limit purge and
+the workflow tick. Each has a **floor**, and that is the point — these numbers
+go straight into an `asyncio.sleep` inside a `while True`, so a 0 is not "purge
+constantly" but a process spinning a whole CPU, one per worker. A value below
+the floor, or one that isn't a number, is corrected at startup and recorded in
+`maintenance.ANOMALIAS` so the config audit reports it instead of applying the
+correction silently. `tests/config/test_maintenance.py` fails if a loop goes
+back to writing its own interval.
+
+The split that decides where a number lives: **what gets swept is config, how
+often the broom passes is code.** Log retention is set by the admin because it
+decides which data is lost; the 24 h sweep is not. The rate-limit purge interval
+affects no quota at all — a window stops counting when it expires, not when its
+row is deleted.
 
 This file has to exist in **two places**: `all_iagenthub/CLAUDE.md` (the
 working-folder root, which Claude Code loads and which is not a repo) and
