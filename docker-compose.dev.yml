@@ -57,11 +57,16 @@ services:
         condition: service_started
     build:
       context: "${DEV_BACKEND_REPO:-../backend_fastapi}"
+      # requirements.lock, no requirements.txt: el .dockerignore del backend pasó
+      # a ser lista blanca (app/, main.py, docker-entrypoint.sh, requirements.lock)
+      # y requirements.txt dejó de llegar al contexto de build — el COPY fallaba
+      # con "/requirements.txt: not found". Además dev instala ahora exactamente
+      # lo mismo que la imagen publicada, con hashes.
       dockerfile_inline: |
         FROM python:3.12-slim AS builder
         WORKDIR /build
-        COPY requirements.txt .
-        RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+        COPY requirements.lock .
+        RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
 
         FROM python:3.12-slim
         WORKDIR /app
