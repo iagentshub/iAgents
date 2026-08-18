@@ -460,6 +460,35 @@ matters. Agents and skills live in their tables; that function only reaches the
 used to read from there, which is why it shipped a well-formed ZIP with the two
 central resources as empty lists and no error anywhere.
 
+### Request size is one number and the admin owns it
+
+The size of an upload is decided in **one** place: `max_request_bytes` in the
+platform settings (Admin · Configuration · Uploads), applied by
+`BodySizeLimitMiddleware` to **every** request, not just the multipart ones.
+**0 means no limit, and 0 is the default.** `GAIA_BODY_MAX_BYTES` survives only
+as the starting value when nobody has touched the panel.
+
+It used to be four numbers that disagreed: 10 MB announced by Flutter, 2 MB in
+the middleware (with a dead 11 MB override for the avatar), 10 MB again inside
+`upload_avatar`, and **1 MB in nginx** — which nobody had written, because it is
+`client_max_body_size`'s default and it went first. The user picked a 4 MB PDF
+the interface accepted and got nginx's **HTML** 413, not the `payload_too_large`
+`APIError` the backend builds with `limit_bytes` inside.
+
+Two rules keep it from growing back. **nginx never imposes a ceiling of its own**
+(`client_max_body_size 0` in `frontend_react/nginx.react.conf`) — its 413 is a
+page no client can parse, so the rejection has to be the backend's JSON. And
+**the client never carries a copy of the number**: Flutter reads it from
+`/api/settings/platform/public` into `UploadLimits`, which only skips a doomed
+upload and puts the real figure in the message.
+
+The middleware re-reads the value per request behind a cache invalidated on
+write, the same pattern as `billing_enabled` — pinning it at construction time
+would freeze it at boot and the panel would change nothing until a restart.
+Unlimited is a warning in the startup audit (`body_limit`), because with nginx
+out of the way it is the only thing standing between a `await file.read()` and
+memory. Ver `docs/adr/011-un-solo-limite-de-tamano-y-lo-pone-el-admin.md`.
+
 ### Rate limiting
 
 **Every route limiter counts in the database, not in the process.** They are
