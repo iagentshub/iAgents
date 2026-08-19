@@ -329,6 +329,15 @@ If you ever do need to parse by hand, that is the function to call.
 one thing that must not drift silently. After deliberately adding or removing a
 route, regenerate it with the command above.
 
+It freezes the **set**, sorted alphabetically — not the order of registration,
+which is what FastAPI actually resolves by. That matters when you split a route
+module into a package: the order then becomes whatever isort does to the
+imports in `__init__.py`, and a parametric route registered before a more
+specific one makes the specific one unreachable — no error, no failing test,
+just `item_id="packs"`. `tests/api/test_rutas_ensombrecidas.py` is the guard for
+that. A path parameter does not cross `/`, so only routes with the same number
+of segments can collide.
+
 ### Chat streaming
 
 `stream_chat()` in `app/services/chat.py` is an async generator of SSE frames.
