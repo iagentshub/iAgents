@@ -386,8 +386,29 @@ list (foreign keys) and the per-dialect marker table. `SCHEMA_SQLITE` and
 Three things stay in Python **on purpose**: the ~66 queries built at runtime
 (optional filters, variable-length `IN`, table as a parameter), the `PRAGMA`s
 in `db.py`, and `storage/migrations/` — a historical sequence whose SQL is
-interleaved with the Python that transforms the data. The migration duplication
-between `sqlite.py` and `postgres.py` is still open.
+interleaved with the Python that transforms the data.
+
+**The migration duplication between `sqlite.py` and `postgres.py` is closed.**
+Those two files are now just their runner. The steps live in
+`storage/migrations/steps/`, grouped by domain with **both dialects side by
+side**, and the list of steps is declared **once**: `MIGRATION_PAIRS` holds one
+`MigrationPair(version, name, sqlite, postgres)` per step, and each engine's
+tuple is derived from it. Adding a step to one engine and forgetting the other
+no longer compiles. Where the SQL is identical in both engines — index DDL,
+mostly — a single function is passed to both sides (`steps/shared.py`).
+
+Two things that look unifiable and are not. `_remove_obsolete_knowledge_pack_items`
+is byte-for-byte identical in both engines but calls a step that is **not**:
+sharing it would have made PostgreSQL run the SQLite variant. And the two
+catch-up sequences in `migrations/legacy/` (`_catchup_sqlite.py`,
+`_catchup_pg.py`) are **not split**: they are idempotent steps kept in their
+original order, and their failure shows up when upgrading an old install, never
+in a suite that starts from an empty database.
+
+`tests/storage/test_migraciones_pg_traducidas.py` no longer reads
+`postgres.py` as a file — it walks every function registered as a step's
+PostgreSQL side, wherever it lives. Identifying them by file would leave the
+guard looking at the wrong place the next time the code moves.
 
 **A query that only works on one engine declares it** with `-- engine: pg` or
 `-- engine: sqlite` under its name; the loader strips that line so it never
