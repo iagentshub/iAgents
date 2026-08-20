@@ -122,7 +122,7 @@ flutter analyze          # exits non-zero on infos, so `analyze && test` short-c
 `app_flutter/CLAUDE.md` holds the conventions of that repo (state, listings,
 i18n, file-size limits). What follows is only what a cross-repo change needs.
 
-Three tests here assert facts about the tree rather than behaviour, so they
+Several tests here assert facts about the tree rather than behaviour, so they
 fail on files you may not think you touched:
 
 - `a11y_iconos_test.dart` — every icon-only button needs an accessible name,
@@ -133,6 +133,23 @@ fail on files you may not think you touched:
   deliberate; the test only chases the concatenation.
 - `backend_url_test.dart` — shares its case table with `vs_code/src/test/
   url.test.ts`. Change one, change both.
+- `i18n_sin_literales_test.dart`, `i18n_claves_existentes_test.dart` and
+  `locales_sin_huerfanos_test.dart` — the
+  language is a **code, never a boolean**. `isEnglish ? … : …` and
+  `languageCode == 'en' ? … : …` are banned in `features/auth`,
+  `features/public`, `shared/widgets`, `shared/i18n` and `shared/state`: with a
+  third language they don't fail, those screens just stay in Spanish. The second
+  test compares `assets/locales/{es,en}/` against the namespaces the code
+  actually loads — there are **five** (`resources`, `auth`, `common`, `nav`,
+  `pricing`), and there used to be 25 files per language, 284 KB of bundle that
+  nobody read. Translation takes **one argument**, the id: `tr('agents.publish')`,
+  from `lib/utils/i18n.dart`. Calls used to carry the Spanish text as a fallback
+  too, which hid every undeclared key — it looked right in Spanish and stayed
+  Spanish in English. 50 had slipped through, including the activate/deactivate
+  buttons on four screens. A missing key now shows the **id** and warns in the
+  console. **Do not copy React's locale files here**: React has its own
+  frozen list, and that is where this came from. The conventions are in
+  `app_flutter/CLAUDE.md`.
 - `deferred_routes_test.dart` — admin, Centinel, metadata, workflows and
   checkout are imported `deferred as` in `lib/app/router/internal_router.dart`
   and mounted through `DeferredPage`, which keeps 777 KB out of the initial web
