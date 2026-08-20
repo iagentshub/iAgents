@@ -252,13 +252,55 @@ require_admin                                            # admin only
 ```
 
 Ranks are `guest:0 < standard:1 < admin:2`. **A new endpoint gets
-`require_auth` and is therefore closed to guests.** Only add `require_session`
-when the guest demo genuinely needs it — the guest allowlist is derived
-deliberately, not by convenience, and `tests/api/test_guest_boundary.py`
-asserts both sides of the line.
+`require_auth` and is therefore closed to guests.** Add `require_session` when
+the endpoint belongs to the caller's own personal space, which is what the
+guest now has in full — agents, skills, prompts, tools, knowledge, connections,
+memory, workflows, saved chats, preferences. Keep it closed for anything that
+is not his: admin, users, billing, platform settings, external OAuth accounts,
+PATs and the VS Code pairing (long-lived credentials would outlive the session
+that issued them), groups, social, and publishing to Explore.
+
+That line used to be **derived**: an endpoint with an `is_guest(...)` branch was
+exactly one that knew how to work against the in-process `GuestSession`. There
+is no GuestSession any more — the guest is an ephemeral row in `users` and uses
+the same storage as everyone — so the boundary is now a product decision
+written down in `tests/api/test_guest_boundary.py`, which asserts both sides.
+See `docs/adr/012-el-invitado-es-un-usuario-efimero.md`.
 
 `require_auth` used to alias the `guest` rank, which left ~140 private
 endpoints open to guest sessions. Do not widen it back.
+
+### The guest is an ephemeral user, not a dict
+
+`app/storage/guest.py` used to hold the demo session in a process `dict`. With
+`GAIA_WORKERS>1` and no session affinity in the proxy, the guest lost his work
+between any two requests — the agent he had just created was simply gone, no
+error — and `MAX_SESSIONS` was per process, so the real cap was `workers × 200`.
+
+A guest is now **a row in `users`** with `role='guest'`, whose `id` and
+`username` are both the `guest:<id>` that already travelled in the JWT — which
+is why `is_guest()` is still a prefix check with no query behind it. From there
+he uses the same storage as anybody: **there is no `is_guest` branch left in a
+handler**, and the 107 there used to be are gone.
+
+What sets him apart is how long he lasts. Logging out runs `purge_user_data` on
+him — the GDPR routine — and `purge_expired_guests()` sweeps the ones left
+without a live session, hanging off the GDPR purge loop that already existed.
+Expiry is **"no live session"**, never a TTL from signup: a TTL deletes the work
+of a guest who is still using it.
+
+Two things this hands you:
+
+- **Any query that lists or counts users must exclude them**, or the guest shows
+  up in the people search, the admin panel and the stats, appearing and
+  vanishing between two reloads. Done in `queries/users.sql`, `auth:list_users`,
+  `billing:list_users`, `admin_stats:user_counts`, `explore:user_id_by_username`
+  and the public profile in `routes/users.py`.
+- **Publishing is the one thing he cannot do**, and it lives in exactly one
+  place: `assert_can_publish` in `app/services/publishing.py`, called wherever a
+  resource goes public. What he published would vanish with his session.
+
+Ver `docs/adr/012-el-invitado-es-un-usuario-efimero.md`.
 
 ### The session is three cookies and a row in the database
 
@@ -461,9 +503,14 @@ pidiéndolos habría dejado de funcionar. Dos guardas lo sostienen:
 
 ### The two sides of GDPR read the same table list
 
-Deletion is `app/sql/queries/gdpr.sql` (25 `DELETE`s, run by
-`purge_user_data`); export is `queries/gdpr_export.sql` (15 files in the ZIP,
-built by `app/services/gdpr.py`). **A new resource has to reach both**, and no
+Deletion is `app/sql/queries/gdpr.sql` (27 `DELETE`s, run by
+`purge_user_data`); export is `queries/gdpr_export.sql` (17 files in the ZIP,
+built by `app/services/gdpr.py`). It is also **the guest's whole lifecycle**:
+closing a guest session runs `purge_user_data` on it, so a resource that never
+reaches the deletion routine now also survives a logout it should not have —
+see `docs/adr/012-el-invitado-es-un-usuario-efimero.md`.
+
+**A new resource has to reach both**, and no
 table declares `REFERENCES users`, so the database drags nothing along behind
 you: prompts, tools, memory and packs each got added without going back to the
 deletion routine, and users who exercised their right to erasure left their rows
@@ -475,8 +522,11 @@ behind with an `owner_id` pointing at nobody.
 missing from a `DELETE`, filtered by the wrong column, or deleted but never
 exported. Two tables are out on purpose and named in `EXCLUIDAS` with the reason;
 add yours there rather than widening the guard. **Tables keyed by `username`
-instead — `personal_access_tokens`, `vscode_auth_codes`,
-`user_agent_preferences`, `subscriptions` — are still outside all of this.**
+instead — `personal_access_tokens`, `vscode_auth_codes`, `subscriptions` — are
+still outside all of this.** `user_agent_preferences` was one of them until the
+guest started writing it from the chat; it is deleted and exported now, and its
+`username` column holds the **id** (the writer is `require_auth`, which returns
+the id), which is exactly the kind of mismatch the guard cannot see.
 
 Migration 28 (`gdpr_orphan_resources`, both dialects) cleans up the rows left
 behind by installs that ran the old routine. It is the only destructive
@@ -678,11 +728,12 @@ were still live, and each one costs something real to rediscover:
   `find . -name hub.db` before deleting a database — the warning existed because
   the directory names suggested the opposite of the truth.
 - **Sections a guest cannot use are hidden in the client, never opened in the
-  backend.** `_visibleMainItems(role)` drops `workflows` from the Flutter
-  navigation catalogue for `role == 'guest'`. The fix for "the guest sees a
-  403" is always here, not a wider guard — see the allowlist rule above.
-  Checkout is the open one: it is reachable without a session at all, and
-  whether to block or redirect is a product call.
+  backend.** The fix for "the guest sees a 403" is here, not a wider guard —
+  see the allowlist rule above. This used to name `workflows`, dropped from
+  `_visibleMainItems(role)` for `role == 'guest'`; workflows are the guest's
+  now, so what is left hidden is what is genuinely not his. Checkout is the
+  open one: it is reachable without a session at all, and whether to block or
+  redirect is a product call.
 - **The duplication across the three compose files is load-bearing.** Pulling
   `watchtower` + `docker-proxy` into a shared fragment with `include:` looks
   obvious until you notice `install.sh` and `install.ps1` `curl` **one file**
