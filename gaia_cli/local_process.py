@@ -273,6 +273,7 @@ def cmd_local_start() -> None:
         pass
 
     gaia_port = read_env_var(ENV_FILE, "GAIA_PORT", "8765")
+    sqlite_pool_size = read_env_var(ENV_FILE, "GAIA_SQLITE_POOL_SIZE", "")
     admin_username = read_env_var(ENV_FILE, "GAIA_ADMIN_USERNAME", "admin")
     admin_email = read_env_var(ENV_FILE, "GAIA_ADMIN_EMAIL", "admin@localhost.com")
     admin_reset = read_env_var(ENV_FILE, "GAIA_ADMIN_RESET", "")
@@ -332,6 +333,8 @@ def cmd_local_start() -> None:
                 "DATABASE_URL": "",
             }
         )
+        if sqlite_pool_size:
+            backend_env["GAIA_SQLITE_POOL_SIZE"] = sqlite_pool_size
         with open(BACKEND_LOG, "ab") as log_fh:
             backend_proc = subprocess.Popen(
                 [str(venv_python()), "main.py"],

@@ -140,6 +140,13 @@ def test_rutas_compartidas_siguen_apuntando_a_la_raiz_del_repo():
     assert common.SCRIPT_DIR == REPO_ROOT.resolve()
 
 
+def test_modo_local_propaga_el_tamano_del_pool_sqlite():
+    source = (REPO_ROOT / "gaia_cli" / "local_process.py").read_text(encoding="utf-8")
+    assert 'read_env_var(ENV_FILE, "GAIA_SQLITE_POOL_SIZE", "")' in source
+    assert 'if sqlite_pool_size:' in source
+    assert 'backend_env["GAIA_SQLITE_POOL_SIZE"] = sqlite_pool_size' in source
+
+
 # ── Secretos que compose exige sin valor por defecto ──────────────────────────
 
 

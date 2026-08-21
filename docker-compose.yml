@@ -144,6 +144,7 @@ services:
       GAIA_RELOAD: "false"
       GAIA_WORKERS: "4"
       GAIA_LLM_MAX_THREADS: "${GAIA_LLM_MAX_THREADS:-16}"
+      GAIA_SQLITE_POOL_SIZE: "${GAIA_SQLITE_POOL_SIZE:-}"
       GAIA_HOST: "0.0.0.0"
       GAIA_PORT: "8765"
       # ↓ Pon el dominio exacto del frontend (sin barra final)

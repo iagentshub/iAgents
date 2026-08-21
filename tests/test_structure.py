@@ -111,6 +111,9 @@ def test_docker_con_backend_usa_postgresql_por_defecto(compose):
     database_url = backend["environment"]["DATABASE_URL"]
     assert "DATABASE_URL-postgresql://gaia:" in database_url
     assert "@postgres:5432/iagentshub" in database_url
+    assert backend["environment"]["GAIA_SQLITE_POOL_SIZE"] == (
+        "${GAIA_SQLITE_POOL_SIZE:-}"
+    )
     assert backend["depends_on"]["postgres"]["condition"] == "service_healthy"
 
     postgres = services["postgres"]
@@ -124,6 +127,7 @@ def test_instaladores_nuevos_configuran_postgresql_y_fallback_local():
 
     for installer in (unix, windows):
         assert "DATABASE_URL=postgresql://gaia:" in installer
+        assert "GAIA_SQLITE_POOL_SIZE" not in installer
         assert "Docker no est" in installer
         assert "modo local con SQLite" in installer
 
