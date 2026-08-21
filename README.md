@@ -17,8 +17,9 @@
 ## Instalación / Install
 
 Una única URL por sistema operativo. El instalador despliega la plataforma
-completa (backend FastAPI y frontend React) y pregunta qué **modo**
-quieres (Docker o sin Docker):
+completa (backend FastAPI y frontend React). Prefiere Docker con PostgreSQL;
+si Docker no está instalado en una instalación nueva, usa el modo local con
+SQLite:
 
 | | Plataforma | Comando |
 |---|---|---|
@@ -34,7 +35,7 @@ irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
 El script:
-1. En una instalación nueva pregunta el modo: **Docker** (recomendado, incluye PostgreSQL opcional) o **sin Docker** (Python/Node directos, SQLite).
+1. En una instalación nueva usa por defecto **Docker con PostgreSQL**. Se puede elegir **sin Docker con SQLite**; si Docker no está instalado al aceptar el valor predeterminado, cambia automáticamente a ese modo local.
 2. Permite instalar la aplicación **completa**, solo el **backend** o solo el **frontend**. El frontend aislado solicita la URL de su backend.
 3. En las actualizaciones detecta y conserva automáticamente ambas elecciones.
 4. Instala únicamente las dependencias y repositorios necesarios para los componentes elegidos.
@@ -77,8 +78,7 @@ python gaia.py logs --local      rem tail logs
 ```bash
 git clone https://github.com/iagentshub/iAgents.git
 cd iagentshub/iAgents
-cp .env.example .env          # edita GAIA_AGENTS_SECRET y GAIA_FRONTEND_URL
-python3 gaia.py start               # Docker, imágenes locales
+python3 gaia.py start               # Docker + PostgreSQL; crea .env seguro si falta
 python3 gaia.py start --hub         # Docker, imagen de GitHub Container Registry
 python3 gaia.py start --dev         # Docker, hot reload con código local
 python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)

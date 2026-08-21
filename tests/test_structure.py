@@ -27,6 +27,12 @@ def _load_hub_compose() -> dict:
     )
 
 
+def _load_backend_compose() -> dict:
+    return yaml.safe_load(
+        (REPO_ROOT / "docker-compose.backend.yml").read_text(encoding="utf-8")
+    )
+
+
 # .env / configuracion
 
 
@@ -90,6 +96,36 @@ def test_hub_watchtower_keeps_periodic_updates_with_http_api():
     environment = _load_hub_compose()["services"]["watchtower"]["environment"]
     assert environment["WATCHTOWER_HTTP_API_UPDATE"] == "true"
     assert environment["WATCHTOWER_HTTP_API_PERIODIC_POLLS"] == "true"
+
+
+@pytest.mark.parametrize(
+    "compose",
+    [_load_compose(), _load_hub_compose(), _load_backend_compose()],
+)
+def test_docker_con_backend_usa_postgresql_por_defecto(compose):
+    services = compose["services"]
+    assert "postgres" in services
+
+    backend_name = "backend" if "backend" in services else "iagentshub"
+    backend = services[backend_name]
+    database_url = backend["environment"]["DATABASE_URL"]
+    assert "DATABASE_URL-postgresql://gaia:" in database_url
+    assert "@postgres:5432/iagentshub" in database_url
+    assert backend["depends_on"]["postgres"]["condition"] == "service_healthy"
+
+    postgres = services["postgres"]
+    assert "healthcheck" in postgres
+    assert any("iagentshub_postgres" in volume for volume in postgres["volumes"])
+
+
+def test_instaladores_nuevos_configuran_postgresql_y_fallback_local():
+    unix = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
+    windows = (REPO_ROOT / "install.ps1").read_text(encoding="utf-8-sig")
+
+    for installer in (unix, windows):
+        assert "DATABASE_URL=postgresql://gaia:" in installer
+        assert "Docker no est" in installer
+        assert "modo local con SQLite" in installer
 
 
 # estructura de datos

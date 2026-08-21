@@ -69,7 +69,7 @@ Write-Host ""
 
 # ── Modo de instalación ───────────────────────────────────────────────────────
 Write-Step "Modo de instalacion"
-Write-Host "  1) Docker      - recomendado, aislado, incluye PostgreSQL opcional"
+Write-Host "  1) Docker      - recomendado, aislado, usa PostgreSQL"
 Write-Host "  2) Sin Docker  - Python + Node.js directos, SQLite"
 $ModeFile = "$InstallDir\.install-mode"
 $DetectedMode = $null
@@ -84,6 +84,11 @@ $InstallMode = if ($env:IAGENTSHUB_MODE) { $env:IAGENTSHUB_MODE } else { $Detect
 if (-not $InstallMode) {
     $ans = Read-Host "  Elige [1-2] (default 1)"
     $InstallMode = if ($ans -eq "2") { "local" } else { "docker" }
+    if ($InstallMode -eq "docker" -and
+        $null -eq (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Write-Warn "Docker no esta instalado; se usara el modo local con SQLite."
+        $InstallMode = "local"
+    }
 }
 if ($InstallMode -notin @("docker", "local")) {
     Write-Fail "IAGENTSHUB_MODE debe ser 'docker' o 'local' (valor: $InstallMode)"
@@ -279,8 +284,8 @@ GAIA_RESET_EXPIRE_HOURS=1
 
 GAIA_MAX_GUEST_SESSIONS=0
 
-# -- Base de datos -- vacio = SQLite en /data/hub.db
-DATABASE_URL=
+# PostgreSQL es el motor predeterminado de las instalaciones Docker nuevas
+DATABASE_URL=postgresql://gaia:$($DbPassword)@postgres:5432/iagentshub
 GAIA_DB_PASSWORD=$DbPassword
 
 # -- Stripe (opcional) --

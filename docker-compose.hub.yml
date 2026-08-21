@@ -56,7 +56,9 @@ services:
       GAIA_WEBMAIL_URL:          "${GAIA_WEBMAIL_URL:-}"
       GAIA_RESET_EXPIRE_HOURS:   "${GAIA_RESET_EXPIRE_HOURS:-1}"
       GAIA_MAX_GUEST_SESSIONS:   "${GAIA_MAX_GUEST_SESSIONS:-0}"
-      DATABASE_URL:              "${DATABASE_URL:-}"
+      # PostgreSQL por defecto. DATABASE_URL= (vacío explícito) mantiene
+      # SQLite solo para instalaciones antiguas que aún no se hayan migrado.
+      DATABASE_URL:              "${DATABASE_URL-postgresql://gaia:${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}@postgres:5432/iagentshub}"
       GAIA_TRUSTED_PROXIES:      "127.0.0.1"
       GAIA_CSRF_ORIGIN_CHECK:    "${GAIA_CSRF_ORIGIN_CHECK:-enforce}"
       GAIA_CSRF_TOKEN_CHECK:     "${GAIA_CSRF_TOKEN_CHECK:-enforce}"
@@ -86,6 +88,9 @@ services:
       WATCHTOWER_HTTP_API_TOKEN: "${WATCHTOWER_HTTP_API_TOKEN:-}"
     volumes:
       - iagentshub_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import http.client; c=http.client.HTTPConnection('localhost',80,timeout=5); c.request('GET','/api/health'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
@@ -162,27 +167,23 @@ services:
       ALLOW_START: 1
       ALLOW_STOP: 1
 
-  # ── PostgreSQL (opcional) ─────────────────────────────────────────────────
-  # Descomenta este bloque para usar PostgreSQL en lugar de SQLite.
-  # GAIA_DB_PASSWORD ya está en tu .env (generado aleatoriamente al instalar).
-  # Actualiza DATABASE_URL con ese valor:
-  #   DATABASE_URL=postgresql://gaia:<GAIA_DB_PASSWORD>@postgres:5432/iagentshub
-  #
-  # postgres:
-  #   image: postgres:16-alpine
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_DB: iagentshub
-  #     POSTGRES_USER: gaia
-  #     POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}"
-  #   volumes:
-  #     - iagentshub_postgres:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U gaia -d iagentshub"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  # ── PostgreSQL (motor por defecto del modo Docker) ─────────────────────
+  # Motor por defecto para instalaciones Docker nuevas.
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: iagentshub
+      POSTGRES_USER: gaia
+      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}"
+    volumes:
+      - iagentshub_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaia -d iagentshub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   iagentshub_data:
-  # iagentshub_postgres:
+  iagentshub_postgres:
