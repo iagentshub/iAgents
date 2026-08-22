@@ -59,6 +59,34 @@ def test_cli_enruta_status_local_sin_docker(monkeypatch):
     assert calls == ["local"]
 
 
+def test_start_sin_docker_instalado_hace_fallback_a_sqlite(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(sys, "argv", ["gaia.py", "start"])
+    monkeypatch.setattr(cli.shutil, "which", lambda _: None)
+    monkeypatch.setattr(cli, "cmd_local_start", lambda: calls.append("local"))
+
+    cli.main()
+
+    assert calls == ["local"]
+    assert "modo local con SQLite" in capsys.readouterr().out
+
+
+def test_start_con_docker_instalado_mantiene_compose(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sys, "argv", ["gaia.py", "start"])
+    monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(cli.os, "chdir", lambda _: None)
+    monkeypatch.setattr(
+        cli,
+        "cmd_start",
+        lambda compose, dev, hub: calls.append((compose, dev, hub)),
+    )
+
+    cli.main()
+
+    assert calls == [(["docker", "compose"], False, False)]
+
+
 @pytest.mark.parametrize(
     ("flag", "expected_compose", "dev", "hub"),
     [
@@ -85,6 +113,7 @@ def test_cli_conserva_la_seleccion_de_compose(
     calls = []
     args = ["gaia.py", "start"] + ([flag] if flag else [])
     monkeypatch.setattr(sys, "argv", args)
+    monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/docker")
     monkeypatch.setattr(cli.os, "chdir", lambda _: None)
     monkeypatch.setattr(
         cli,
@@ -109,6 +138,13 @@ def test_cli_rechaza_flags_incompatibles(monkeypatch, capsys):
 def test_rutas_compartidas_siguen_apuntando_a_la_raiz_del_repo():
     assert common.IAGENTS_DIR == REPO_ROOT.resolve()
     assert common.SCRIPT_DIR == REPO_ROOT.resolve()
+
+
+def test_modo_local_propaga_el_tamano_del_pool_sqlite():
+    source = (REPO_ROOT / "gaia_cli" / "local_process.py").read_text(encoding="utf-8")
+    assert 'read_env_var(ENV_FILE, "GAIA_SQLITE_POOL_SIZE", "")' in source
+    assert 'if sqlite_pool_size:' in source
+    assert 'backend_env["GAIA_SQLITE_POOL_SIZE"] = sqlite_pool_size' in source
 
 
 # ── Secretos que compose exige sin valor por defecto ──────────────────────────
@@ -157,6 +193,28 @@ def test_el_ejemplo_declara_el_token_sin_valor():
     # línea, un .env recién creado vuelve a romper `--hub`.
     lineas = (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
     assert "WATCHTOWER_HTTP_API_TOKEN=" in lineas
+
+
+def test_env_nuevo_configura_postgresql_por_defecto(monkeypatch, tmp_path):
+    env_example = tmp_path / ".env.example"
+    env_example.write_text(
+        "GAIA_AGENTS_SECRET=\n"
+        "DATABASE_URL=\n"
+        "GAIA_DB_PASSWORD=\n"
+        "WATCHTOWER_HTTP_API_TOKEN=\n",
+        encoding="utf-8",
+    )
+    env = tmp_path / ".env"
+    monkeypatch.setattr(common, "IAGENTS_DIR", tmp_path)
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    password = common.read_env_var(env, "GAIA_DB_PASSWORD")
+    assert len(password) == 64
+    assert common.read_env_var(env, "DATABASE_URL") == (
+        f"postgresql://gaia:{password}@postgres:5432/iagentshub"
+    )
 
 
 # ── Un modo para el otro: los dos publican el mismo puerto ────────────────────

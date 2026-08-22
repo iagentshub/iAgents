@@ -95,7 +95,7 @@ services:
       retries: 30
       start_period: 30s
 
-  # ── PostgreSQL (opcional — se activa cuando DATABASE_URL apunta a él) ──────
+  # ── PostgreSQL (motor por defecto del modo Docker) ─────────────────────
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -144,6 +144,7 @@ services:
       GAIA_RELOAD: "false"
       GAIA_WORKERS: "4"
       GAIA_LLM_MAX_THREADS: "${GAIA_LLM_MAX_THREADS:-16}"
+      GAIA_SQLITE_POOL_SIZE: "${GAIA_SQLITE_POOL_SIZE:-}"
       GAIA_HOST: "0.0.0.0"
       GAIA_PORT: "8765"
       # ↓ Pon el dominio exacto del frontend (sin barra final)
@@ -190,8 +191,10 @@ services:
       # Máximo de sesiones guest simultáneas. 0 desactiva el acceso de invitado;
       # mismo default que hub y backend (.env.example lo sube a 200 para el demo).
       GAIA_MAX_GUEST_SESSIONS: "${GAIA_MAX_GUEST_SESSIONS:-0}"
-      # postgresql://gaia:password@postgres:5432/iagentshub — leave empty for SQLite
-      DATABASE_URL: ""
+      # PostgreSQL es el default cuando DATABASE_URL no existe. Un valor vacío
+      # explícito conserva SQLite para instalaciones antiguas sin migrarlas a
+      # una base vacía de forma silenciosa.
+      DATABASE_URL: "${DATABASE_URL-postgresql://gaia:${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}@postgres:5432/iagentshub}"
       # Debe coincidir con el POSTGRES_PASSWORD del servicio postgres. Define en .env
       GAIA_DB_PASSWORD: "${GAIA_DB_PASSWORD:-}"
       # Client ID de la GitHub OAuth App (Device Flow habilitado) para el botón

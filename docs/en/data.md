@@ -16,7 +16,7 @@ All platform data is stored in the `data/` directory on the host. This directory
 | Path | Contents |
 |---|---|
 | `settings.json` | Global instance configuration (JWT secret, SMTP, limits) |
-| `hub.db` | Main SQLite database. Contains users, conversations, messages, connections (encrypted API keys), knowledge, groups, groups, and token usage. Replaced by PostgreSQL in production via `DATABASE_URL`. |
+| `hub.db` | Main SQLite database for local/fallback mode. Contains users, conversations, messages, connections (encrypted API keys), knowledge, groups, groups, and token usage. It reuses 3 connections per worker by default (`GAIA_SQLITE_POOL_SIZE`, range 1-8). New Docker installations replace it with PostgreSQL through `DATABASE_URL`. |
 | `agents/` | Agent configurations as `config.json` files per scope (`private/` and `public/`) |
 | `skills/` | Skills as `SKILL.md` files per scope (`private/` and `public/`) |
 | `memory/` | Memory files per agent. Created and updated automatically after each conversation when the agent has memory enabled. |

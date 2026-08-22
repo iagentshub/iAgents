@@ -124,6 +124,11 @@ def ensure_env() -> None:
         for line in content.splitlines(keepends=True):
             if line.startswith("GAIA_AGENTS_SECRET="):
                 lines.append(f"GAIA_AGENTS_SECRET={agents_secret}\n")
+            elif line.startswith("DATABASE_URL="):
+                lines.append(
+                    "DATABASE_URL="
+                    f"postgresql://gaia:{db_pass}@postgres:5432/iagentshub\n"
+                )
             elif line.startswith("GAIA_DB_PASSWORD="):
                 lines.append(f"GAIA_DB_PASSWORD={db_pass}\n")
             else:

@@ -14,9 +14,9 @@ Installation is a single script per OS (`install.sh` / `install.ps1`) and day-to
 ## One-command installation
 
 One URL per operating system. The script installs the full platform (FastAPI
-backend plus React frontend) and asks for the **mode**: Docker
-(recommended, includes optional PostgreSQL) or without Docker (Python/Node
-directly, SQLite).
+backend plus React frontend). Docker with PostgreSQL is the default. If Docker
+is not installed on a new installation, it automatically selects direct
+Python/Node processes with SQLite.
 
 The same command installs and updates. After the first installation, the
 installer records both the selected mode and components and reuses them
@@ -63,13 +63,13 @@ $env:IAGENTSHUB_COMPONENT = "backend"
 irm https://raw.githubusercontent.com/iagentshub/iAgents/main/install.ps1 | iex
 ```
 
-> **Note:** The non-Docker mode uses SQLite as the database. For production environments or high concurrency, the Docker mode with PostgreSQL is recommended.
+> **Note:** The non-Docker mode always uses SQLite. New Docker installations with a backend use PostgreSQL.
 
 ---
 
 ## First launch (with cloned repository)
 
-Clone the repository, copy the example configuration file, fill in the required values, and run the startup script. The platform will be available at `http://localhost` when it finishes.
+Clone the repository and run the startup script. If `.env` is missing, `gaia.py` creates it with random secrets and PostgreSQL configured; then review the domain and administrator values. The platform will be available at `http://localhost` when it finishes.
 
 The backend automatically creates an administrator account the first time it starts. The script always prints the credentials when `start` or `update` finishes:
 

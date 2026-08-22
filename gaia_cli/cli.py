@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 
 from .build_push import cmd_push
@@ -16,7 +17,7 @@ from .compose import (
     cmd_stop,
     cmd_update,
 )
-from .console import BOLD, RESET, YELLOW, error
+from .console import BOLD, RESET, YELLOW, error, warn
 from .local_process import (
     cmd_local_logs,
     cmd_local_reset,
@@ -73,6 +74,7 @@ def _print_docker_usage() -> None:
     print(
         "  --local            Sin Docker: uvicorn + proxy Python (SQLite, sin PostgreSQL)"
     )
+    print("  Base de datos Docker: PostgreSQL (predeterminada)")
     print()
     print(f"{BOLD}Flujo recomendado para despliegues rápidos (--hub):{RESET}")
     print(
@@ -112,6 +114,13 @@ def main() -> None:
         error("--local y --hub son incompatibles.")
 
     command = positional[0] if positional else ""
+
+    # El arranque sin flags prefiere Docker. Si ni siquiera está instalado,
+    # usa el modo local SQLite; un daemon instalado pero detenido sigue siendo
+    # un error para no abrir una base local vacía por accidente.
+    if command == "start" and not (dev or local or hub) and not shutil.which("docker"):
+        warn("Docker no está instalado; arrancando en modo local con SQLite.")
+        local = True
 
     if local:
         if help_mode or not command:

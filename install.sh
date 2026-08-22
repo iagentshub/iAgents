@@ -105,7 +105,7 @@ echo
 
 # ── Modo de instalación ───────────────────────────────────────────────────────
 step "Modo de instalación"
-echo "  1) Docker      — recomendado, aislado, incluye PostgreSQL opcional"
+echo "  1) Docker      — recomendado, aislado, usa PostgreSQL"
 echo "  2) Sin Docker  — Python + Node.js directos, SQLite"
 MODE_ANSWER=""
 MODE_FILE="${INSTALL_DIR}/.install-mode"
@@ -165,14 +165,21 @@ if [ -n "$DETECTED_COMPONENT" ] && [ -z "${IAGENTSHUB_COMPONENT:-}" ]; then
   info "Componentes de la instalación existente detectados automáticamente."
 fi
 INSTALL_MODE="${IAGENTSHUB_MODE:-$DETECTED_MODE}"
+AUTOMATIC_NEW_MODE=false
 if [ -z "$INSTALL_MODE" ]; then
   case "$MODE_ANSWER" in
     2) INSTALL_MODE="local" ;;
-    *) INSTALL_MODE="docker" ;;
+    *) INSTALL_MODE="docker"; AUTOMATIC_NEW_MODE=true ;;
   esac
 fi
 [ "$INSTALL_MODE" = "docker" ] || [ "$INSTALL_MODE" = "local" ] \
   || error "IAGENTSHUB_MODE debe ser 'docker' o 'local' (valor: ${INSTALL_MODE})"
+if [ "$INSTALL_MODE" = "docker" ] && $AUTOMATIC_NEW_MODE; then
+  if ! command -v docker &>/dev/null; then
+    warn "Docker no está instalado; se usará el modo local con SQLite."
+    INSTALL_MODE="local"
+  fi
+fi
 success "Modo: ${INSTALL_MODE}$([ "$INSTALL_MODE" = docker ] && echo ' (Docker)' || echo ' (sin Docker)')"
 if [ -n "$DETECTED_MODE" ] && [ -z "${IAGENTSHUB_MODE:-}" ]; then
   info "Modo de la instalación existente detectado automáticamente."
@@ -303,9 +310,8 @@ GAIA_RESET_EXPIRE_HOURS=1
 GAIA_MAX_GUEST_SESSIONS=0
 
 # ── Base de datos ─────────────────────────────────────────────────────────────
-# Vacío = SQLite en /data/hub.db (recomendado para empezar)
-# PostgreSQL: postgresql://gaia:<GAIA_DB_PASSWORD>@postgres:5432/iagentshub
-DATABASE_URL=
+# PostgreSQL es el motor predeterminado de las instalaciones Docker nuevas.
+DATABASE_URL=postgresql://gaia:${DB_PASSWORD}@postgres:5432/iagentshub
 GAIA_DB_PASSWORD=${DB_PASSWORD}
 
 # ── Stripe (opcional) ─────────────────────────────────────────────────────────

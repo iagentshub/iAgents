@@ -19,6 +19,7 @@ services:
       GAIA_PORT:                 "8765"
       GAIA_RELOAD:               "false"
       GAIA_LLM_MAX_THREADS:      "${GAIA_LLM_MAX_THREADS:-16}"
+      GAIA_SQLITE_POOL_SIZE:     "${GAIA_SQLITE_POOL_SIZE:-}"
       GAIA_FRONTEND_URL:         "${GAIA_FRONTEND_URL:-http://localhost:8007}"
       GAIA_CORS_ORIGINS:         "${GAIA_CORS_ORIGINS:-${GAIA_FRONTEND_URL:-http://localhost:8007}}"
       GAIA_AGENTS_SECRET:        "${GAIA_AGENTS_SECRET:-}"
@@ -37,7 +38,9 @@ services:
       GAIA_WEBMAIL_URL:          "${GAIA_WEBMAIL_URL:-}"
       GAIA_RESET_EXPIRE_HOURS:   "${GAIA_RESET_EXPIRE_HOURS:-1}"
       GAIA_MAX_GUEST_SESSIONS:   "${GAIA_MAX_GUEST_SESSIONS:-0}"
-      DATABASE_URL:              "${DATABASE_URL:-}"
+      # PostgreSQL por defecto. DATABASE_URL= (vacío explícito) mantiene
+      # SQLite solo para instalaciones antiguas que aún no se hayan migrado.
+      DATABASE_URL:              "${DATABASE_URL-postgresql://gaia:${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}@postgres:5432/iagentshub}"
       GAIA_TRUSTED_PROXIES:      "${GAIA_TRUSTED_PROXIES:-127.0.0.1}"
       GAIA_CSRF_ORIGIN_CHECK:    "${GAIA_CSRF_ORIGIN_CHECK:-enforce}"
       GAIA_CSRF_TOKEN_CHECK:     "${GAIA_CSRF_TOKEN_CHECK:-enforce}"
@@ -51,6 +54,9 @@ services:
       WATCHTOWER_CONTAINER_NAME: "${WATCHTOWER_CONTAINER_NAME:-iagentshub-watchtower}"
     volumes:
       - iagentshub_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8765,timeout=5); c.request('GET','/api/health'); r=c.getresponse(); exit(0 if r.status<500 else 1)"]
       interval: 30s
@@ -79,5 +85,21 @@ services:
       ALLOW_START: 1
       ALLOW_STOP: 1
 
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: iagentshub
+      POSTGRES_USER: gaia
+      POSTGRES_PASSWORD: "${GAIA_DB_PASSWORD:?Define GAIA_DB_PASSWORD en .env}"
+    volumes:
+      - iagentshub_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaia -d iagentshub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   iagentshub_data:
+  iagentshub_postgres:
