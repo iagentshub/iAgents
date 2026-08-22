@@ -63,6 +63,17 @@ services:
       STRIPE_SECRET_KEY:         "${STRIPE_SECRET_KEY:-}"
       STRIPE_PUBLISHABLE_KEY:    "${STRIPE_PUBLISHABLE_KEY:-}"
       STRIPE_WEBHOOK_SECRET:     "${STRIPE_WEBHOOK_SECRET:-}"
+      # Estas cuatro faltaban: sin STRIPE_PRODUCT_SEATS el backend considera
+      # Stripe «no configurado» y no se puede cobrar nada, aunque las claves
+      # estén puestas. Se ven en el panel, en Diagnóstico de configuración.
+      STRIPE_API_VERSION:        "${STRIPE_API_VERSION:-2024-06-20}"
+      STRIPE_PRODUCT_SEATS:      "${STRIPE_PRODUCT_SEATS:-}"
+      STRIPE_PRICE_SELFHOSTED_MONTHLY: "${STRIPE_PRICE_SELFHOSTED_MONTHLY:-}"
+      STRIPE_PRICE_SELFHOSTED_ANNUAL:  "${STRIPE_PRICE_SELFHOSTED_ANNUAL:-}"
+      # false → se cobra el importe neto, sin repercutir IVA. Solo tiene
+      # sentido en una instalación que facture por su cuenta fuera del
+      # producto; dentro de la UE, dejarlo activo es lo correcto.
+      STRIPE_TAX:                "${STRIPE_TAX:-true}"
       # Client ID de la GitHub OAuth App (Device Flow habilitado) para el botón
       # "Iniciar sesión con GitHub" en /login y "Conectar con GitHub" en
       # Proveedores. No es secreto — define en .env.
