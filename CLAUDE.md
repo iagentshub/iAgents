@@ -150,6 +150,16 @@ fail on files you may not think you touched:
   console. **Do not copy React's locale files here**: React has its own
   frozen list, and that is where this came from. The conventions are in
   `app_flutter/CLAUDE.md`.
+- `feature_architecture_test.dart` — among other things, **a dialog is opened
+  with `showAppDialog`, never with `showDialog`**. The helper (in
+  `shared/widgets/motion/`) adds the app's transition and, more to the point,
+  drops it entirely when the system asks for reduced motion. A direct call
+  breaks nothing visible — the dialog still shows — which is why this test is
+  the only thing that notices.
+- `web_bundle_budget_test.dart` — **the Flutter version lives in
+  `environment: flutter:` of `pubspec.yaml`, exact**, and every workflow that
+  compiles the app reads it from there with `flutter-version-file`. See the
+  section below: this one spans three repos.
 - `deferred_routes_test.dart` — admin, Centinel, metadata, workflows and
   checkout are imported `deferred as` in `lib/app/router/internal_router.dart`
   and mounted through `DeferredPage`, which keeps 777 KB out of the initial web
@@ -223,6 +233,32 @@ consent. Flutter reaches them with `resolvePublicSiteUri`, not GoRouter: they
 live at the origin root, outside `/app/`, so it is browser navigation. Note
 the backend still stores neither the date nor the version accepted, so today
 consent is required but cannot be evidenced after the fact.
+
+### The Flutter version is one number, in app_flutter's pubspec
+
+Three workflows compile the Flutter app: `app_flutter`'s own CI (both jobs) and
+the `docker-publish` of `iAgents` and `backend_fastapi`, which check
+`app_flutter` out to build the unified image. A fourth path, `gaia build-push`,
+uses whatever the developer has installed.
+
+Only the first one used to pin anything — 3.44.8, written by hand — while the
+other two installed `channel: stable` and took whatever shipped that day. Those
+other two are the ones that build **the image that actually deploys**, so
+production was compiled by an SDK the CI had never validated. Nothing failed:
+same app, two SDKs, and the one reaching users was the untested one.
+
+Now `environment: flutter:` in `app_flutter/pubspec.yaml` is the single source
+and every workflow reads it with `flutter-version-file`. **The version must be
+exact** — the action requires a concrete version, and a range hands the decision
+back to each runner. **The path is relative to the workspace**, not to the
+step's `working-directory`: it is `app_flutter/pubspec.yaml` everywhere except
+`app_flutter`'s own `validate` job, where the repo is the workspace root.
+
+Raising it means editing one file — and then re-measuring the web bundle, since
+`check_web_bundle_size.sh` records the version its budget was measured with.
+`iAgents/tests/test_docker_contexto.py` fails if a workflow goes back to
+deciding its own, reaching the sibling clones the way `test_backend.py` does and
+skipping the ones that are not there.
 
 ### Two images, and only one of them ships
 

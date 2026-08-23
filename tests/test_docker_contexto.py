@@ -11,6 +11,10 @@ la imagen resultante:
   2. Un workflow que no copie `dockerignore.unified` — Docker solo lee el
      `.dockerignore` de la RAÍZ del contexto, así que el de backend_fastapi no
      aplica aquí y el `COPY backend/` se lleva tests/, docs/ y el .git dentro.
+  3. Un workflow que instale Flutter con `channel: stable` a secas — compilaba
+     la app con la versión que hubiera ese día, mientras el CI de app_flutter
+     validaba otra fijada a mano. La imagen que se despliega salía de una
+     versión que nadie había probado.
 
 Los repositorios hermanos se resuelven como en test_backend.py: variable de
 entorno, o directorio hermano. Si no están, se salta.
@@ -19,6 +23,7 @@ entorno, o directorio hermano. Si no están, se salta.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -125,3 +130,55 @@ def test_los_workflows_copian_el_dockerignore(repo):
             "La imagen se publicaria con tests/, docs/ y el .git dentro, y "
             "nada mas lo notaria."
         )
+
+
+@pytest.mark.parametrize("repo", ["iAgents", *REPOS_HERMANOS])
+def test_flutter_se_instala_con_la_version_del_pubspec(repo):
+    """La versión de Flutter vive en app_flutter/pubspec.yaml y solo ahí.
+
+    Los tres repos compilan la misma app: este y backend_fastapi hacen checkout
+    de app_flutter para construir la imagen unificada, y app_flutter lo hace en
+    su propio CI. Cuando cada uno decidía su versión por su cuenta, la que
+    llegaba a producción y la que se validaba eran distintas sin que nada
+    fallara.
+    """
+    raiz = REPO_ROOT if repo == "iAgents" else _repo_dir(repo)
+    if not raiz.is_dir():
+        pytest.skip(f"{repo} no esta clonado junto a este repositorio")
+
+    wf_dir = raiz / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        pytest.skip(f"{repo} no tiene workflows")
+
+    con_flutter = [
+        f for f in sorted(wf_dir.glob("*.yml")) if "subosito/flutter-action" in f.read_text()
+    ]
+    if not con_flutter:
+        pytest.skip(f"{repo} no instala Flutter en ningun workflow")
+
+    for wf in con_flutter:
+        contenido = wf.read_text()
+        assert "flutter-version-file" in contenido, (
+            f"{repo}/.github/workflows/{wf.name} instala Flutter sin "
+            "flutter-version-file: toma la version de 'channel: stable', que "
+            "cambia sola, o una escrita a mano que se separa del pubspec."
+        )
+        assert not re.search(r"^\s*flutter-version:\s*\d", contenido, re.M), (
+            f"{repo}/.github/workflows/{wf.name} fija la version de Flutter a "
+            "mano. La fuente es 'environment: flutter:' de app_flutter/"
+            "pubspec.yaml; escrita aqui, las dos se separan en silencio."
+        )
+
+
+def test_el_pubspec_de_app_flutter_fija_una_version_exacta():
+    """Sin version exacta en el pubspec, `flutter-version-file` no resuelve."""
+    app_flutter = _repo_dir("app_flutter")
+    pubspec = app_flutter / "pubspec.yaml"
+    if not pubspec.is_file():
+        pytest.skip("app_flutter no esta clonado junto a este repositorio")
+
+    assert re.search(r"^\s*flutter:\s*\d+\.\d+\.\d+\s*$", pubspec.read_text(), re.M), (
+        "app_flutter/pubspec.yaml tiene que declarar 'flutter: X.Y.Z' exacto "
+        "dentro de 'environment'. Es lo que leen los tres workflows, y la "
+        "action exige una version exacta, no un rango."
+    )

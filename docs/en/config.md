@@ -22,6 +22,18 @@ Configuration is set in an environment variables file at the project root. Copy 
 | GitHub token | Required to access private repositories. |
 | Skills language | The language in which skills are served (`es` or `en`). |
 | Local paths (dev) | Paths to local repositories for development mode. |
+| Internal Ollama origins | Exact local/LAN Ollama servers the backend may reach. |
+
+## Ollama on a local network
+
+`GAIA_OLLAMA_ALLOWED_ORIGINS` accepts a comma-separated list of exact origins,
+including scheme and port. The defaults cover local and Docker-host Ollama on
+port `11434`. For a LAN installation, for example, use
+`http://192.168.1.20:11434`; this does not authorize other ports on that host.
+
+This variable applies only to internal destinations. Ollama also supports the
+official `https://ollama.com` URL and public custom URLs, which require no
+allowlist entry and still use SSRF validation and DNS pinning.
 
 ---
 

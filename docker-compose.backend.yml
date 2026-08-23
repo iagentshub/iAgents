@@ -19,6 +19,7 @@ services:
       GAIA_PORT:                 "8765"
       GAIA_RELOAD:               "false"
       GAIA_LLM_MAX_THREADS:      "${GAIA_LLM_MAX_THREADS:-16}"
+      GAIA_OLLAMA_ALLOWED_ORIGINS: "${GAIA_OLLAMA_ALLOWED_ORIGINS:-}"
       GAIA_SQLITE_POOL_SIZE:     "${GAIA_SQLITE_POOL_SIZE:-}"
       GAIA_FRONTEND_URL:         "${GAIA_FRONTEND_URL:-http://localhost:8007}"
       GAIA_CORS_ORIGINS:         "${GAIA_CORS_ORIGINS:-${GAIA_FRONTEND_URL:-http://localhost:8007}}"
