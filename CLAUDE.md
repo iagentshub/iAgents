@@ -515,9 +515,11 @@ Two things that look unifiable and are not. `_remove_obsolete_knowledge_pack_ite
 is byte-for-byte identical in both engines but calls a step that is **not**:
 sharing it would have made PostgreSQL run the SQLite variant. And the two
 catch-up sequences in `migrations/legacy/` (`_catchup_sqlite.py`,
-`_catchup_pg.py`) are **not split**: they are idempotent steps kept in their
-original order, and their failure shows up when upgrading an old install, never
-in a suite that starts from an empty database.
+`_catchup_pg.py`) are **not split**: they are idempotent repairs kept in their
+original order. Active tables belong exclusively to `app/sql/schema`; the
+catch-up may add columns or repair legacy data, but it must not be required to
+create a table used by a current query. `test_schema_usage.py` enforces that
+boundary, while upgrade tests exercise the old-install path.
 
 `tests/storage/test_migraciones_pg_traducidas.py` no longer reads
 `postgres.py` as a file — it walks every function registered as a step's
