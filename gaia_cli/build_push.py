@@ -122,15 +122,20 @@ def _push_react(image_repository: str, tag: str) -> str:
             info("Descartando build/web anterior...")
             shutil.rmtree(web_out)
         info("Compilando Flutter Web para /app/...")
+        # Se llama al script del repo, NO a `flutter build web` a secas. Sus
+        # flags tienen la otra mitad en la CSP que sirve nginx: sin
+        # `--no-web-resources-cdn`, Flutter pide CanvasKit a www.gstatic.com y
+        # la política del bloque `location ^~ /app/` no lo permite. El
+        # resultado es la aplicación autenticada en blanco, sin error visible
+        # ni test que se entere. Este camino se saltaba el script y publicaba
+        # justo esa imagen; los tres workflows sí lo usaban.
+        build_web = flutter_src / "tool" / "build_web.sh"
+        if not build_web.is_file():
+            error(f"No se encontró {build_web}: no se puede compilar la web.")
+        # Se invoca con `bash` en vez de confiar en el bit de ejecución: un
+        # checkout en Windows no lo conserva.
         subprocess.run(
-            [
-                "flutter",
-                "build",
-                "web",
-                "--release",
-                "--base-href",
-                "/app/",
-            ],
+            ["bash", str(build_web), "--base-href", "/app/"],
             cwd=flutter_src,
             check=True,
         )

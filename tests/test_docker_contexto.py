@@ -92,6 +92,42 @@ def test_dockerfile_unified_instala_desde_el_lock():
     )
 
 
+def test_gaia_build_push_compila_la_web_con_el_script():
+    """La web se compila con app_flutter/tool/build_web.sh, nunca a mano.
+
+    Los flags de ese script tienen la otra mitad en la CSP que sirve nginx:
+    sin `--no-web-resources-cdn`, Flutter pide CanvasKit a www.gstatic.com y
+    el bloque `location ^~ /app/` no lo permite — la aplicación autenticada
+    sale en blanco, sin error visible ni test que falle.
+
+    `web_bundle_budget_test.dart` ya vigila lo mismo en los workflows, pero
+    solo mira ficheros de `.github/workflows`: `gaia build-push` es el cuarto
+    camino que construye la imagen y se quedaba fuera. Publicó imágenes con la
+    web rota mientras los tres workflows la compilaban bien.
+    """
+    build_push = REPO_ROOT / "gaia_cli" / "build_push.py"
+    if not build_push.is_file():
+        pytest.skip("gaia_cli/build_push.py ya no existe")
+
+    contenido = build_push.read_text()
+    if "flutter" not in contenido:
+        pytest.skip("build_push.py ya no compila la web")
+
+    assert "build_web.sh" in contenido, (
+        "build_push.py compila la web sin usar app_flutter/tool/build_web.sh. "
+        "Los flags que faltan estan acoplados a la CSP de nginx y el fallo es "
+        "una pantalla en blanco, no un error."
+    )
+    # El `flutter build web` suelto es justo lo que se retiro: si vuelve, se
+    # vuelve a saltar los flags aunque el script tambien se mencione.
+    sin_comentarios = "\n".join(
+        ln for ln in contenido.splitlines() if not ln.lstrip().startswith("#")
+    )
+    assert not re.search(r'"flutter"\s*,\s*\n?\s*"build"', sin_comentarios), (
+        "build_push.py vuelve a invocar `flutter build web` directamente."
+    )
+
+
 def test_gaia_build_push_copia_el_dockerignore():
     """`gaia build-push` construye la misma imagen desde la línea de órdenes.
 

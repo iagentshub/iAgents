@@ -181,6 +181,15 @@ CI steps across four repos, so changing a flag meant four commits that landed at
 different times. `web_bundle_budget_test.dart` fails if a workflow goes back to
 calling `flutter build web` on its own.
 
+**There are four callers, not three, and the fourth had no guard.** Besides the
+workflows, `gaia build-push` builds the same image from the command line — and
+it called `flutter build web` directly, so every image published that way served
+an authenticated app that the CSP blanked out. `web_bundle_budget_test.dart`
+never saw it: that test only reads files under `.github/workflows`. The guard
+for this one is `test_gaia_build_push_compila_la_web_con_el_script` in
+`iAgents/tests/test_docker_contexto.py`, which is where the other `build-push`
+guards already live.
+
 ### vs_code
 
 ```bash
