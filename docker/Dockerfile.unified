@@ -74,6 +74,11 @@ COPY --from=py-builder /install /usr/local
 # ── Backend ───────────────────────────────────────────────────────────────────
 COPY backend/ /app/
 
+# Centinel depende de la suite empaquetada. La colección durante el build
+# detecta tanto un contexto incompleto como imports rotos antes de publicar.
+RUN PYTHONDONTWRITEBYTECODE=1 python -m pytest /app/tests --collect-only -q \
+    --no-header -p no:cacheprovider > /dev/null
+
 # ── Frontend ──────────────────────────────────────────────────────────────────
 COPY --from=frontend-builder /build/dist/ /usr/share/nginx/html/
 COPY flutter-web/ /usr/share/nginx/html/app/

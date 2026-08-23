@@ -4,10 +4,9 @@
 # es build-ctx, no el clon del backend.
 #
 # backend/ va con lista blanca porque es lo único que se copia tal cual a la
-# imagen final: sin esto entraban tests/ (14 MB, más que app/), docs/, el
-# .git del checkout y cualquier fichero suelto del runner. El COPY del código
-# es la última capa y cambia en cada build, así que ese peso lo descargaba
-# entera cada instalación en cada actualización.
+# imagen final. Incluye tests/ deliberadamente: Centinel ejecuta la suite del
+# código desplegado. Siguen fuera docs/, .git y cualquier fichero suelto del
+# runner, que solo engordarían la última capa de cada actualización.
 #
 # frontend/ va con lista negra a propósito: solo alimenta el stage de node
 # (npm ci + prerender) y nunca llega a la imagen final, así que enumerar sus
@@ -15,6 +14,7 @@
 
 backend/*
 !backend/app
+!backend/tests
 !backend/main.py
 !backend/requirements.lock
 

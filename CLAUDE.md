@@ -492,6 +492,16 @@ Three things stay in Python **on purpose**: the ~66 queries built at runtime
 in `db.py`, and `storage/migrations/` — a historical sequence whose SQL is
 interleaved with the Python that transforms the data.
 
+The exception is a query that is static except for the **length** of an `IN`
+list. That one lives in the file with a `@name@` marker — the same marker
+convention the schema uses for per-dialect types (`@BOOL@`, `@SERIAL@`) — and
+the caller substitutes as many `?` as it has elements
+(`resource_relations:workflow_agent_presentations` is the only one today).
+`test_sql_contra_motores.py` resolves the marker to a single `?` before
+preparing, so the query is still validated against both engines; leaving it out
+would have excluded exactly the kind of query nobody sees on PostgreSQL until
+deployment.
+
 **The migration duplication between `sqlite.py` and `postgres.py` is closed.**
 Those two files are now just their runner. The steps live in
 `storage/migrations/steps/`, grouped by domain with **both dialects side by
@@ -602,6 +612,37 @@ matters. Agents and skills live in their tables; that function only reaches the
 used to read from there, which is why it shipped a well-formed ZIP with the two
 central resources as empty lists and no error anywhere.
 
+### La extracción de un documento no puede perder texto en silencio
+
+Un fichero importado a conocimiento se guarda **solo como texto**: de los bytes
+originales quedan `checksum` y `size_bytes`, nunca el contenido. Así que lo que
+la extracción deje fuera no está en ninguna parte, y una ficha recortada que se
+enseñe como completa es una pérdida definitiva que nadie puede ver.
+
+Hasta 2026-08 `extract_document_text` recortaba a 500 000 caracteres en sus
+siete salidas — PDF, OCR, texto plano y descarga de URL. Medido: un PDF de
+**62 KB** con 400 páginas perdía el **69,5 %** de su texto, cortando por la
+página 122. No había log, no había columna (`char_count` guardaba el número ya
+recortado) y la interfaz pintaba esa cifra como si fuera el documento entero.
+
+Hoy `extract_document` devuelve un `ExtractedDocument` con `truncated`,
+`source_chars` y `reason`, que llega hasta tres columnas de `knowledge_items` y
+hasta un badge en la ficha. Tres reglas:
+
+- **La cota (`MAX_EXTRACTED_CHARS`, 20 M) es defensa del proceso, no recorte
+  normal.** Está por encima de cualquier documento real; cuando muerde, se
+  anota y se registra.
+- **Ninguna ruta llama a `extract_document_text`**, que devuelve solo el `str` y
+  por tanto pierde el aviso. Usan `_extract_document` de
+  `knowledge/_shared.py`.
+- **La extracción no va por `asyncio.to_thread`**, que es el executor por
+  defecto de asyncio y por tanto el de `bcrypt`: unas cuantas subidas grandes
+  paraban los logins sin que nada fallara. Va por `run_document_blocking`
+  (`app/services/document_executor.py`), con su propio pool acotado.
+
+Las tres las guarda `tests/storage/test_extraccion_sin_perdida_silenciosa.py`.
+Ver `docs/adr/013-la-extraccion-no-pierde-texto-en-silencio.md`.
+
 ### Request size is one number and the admin owns it
 
 The size of an upload is decided in **one** place: `max_request_bytes` in the
@@ -609,6 +650,15 @@ platform settings (Admin · Configuration · Uploads), applied by
 `BodySizeLimitMiddleware` to **every** request, not just the multipart ones.
 **0 means no limit, and 0 is the default.** `GAIA_BODY_MAX_BYTES` survives only
 as the starting value when nobody has touched the panel.
+
+**Y un techo por debajo del panel es el mismo fallo otra vez.** Este trabajo
+revisó nginx, el middleware, el avatar y Flutter, pero no las rutas de
+conocimiento, donde sobrevivieron 10 MB por documento, 10 MB por fichero de pack
+y 50 MB por pack. Con el panel en «sin límite» la interfaz dejaba elegir el
+fichero y era un literal de una ruta el que respondía 413 con un número que no
+aparece en ninguna pantalla. Se fueron en 2026-08. El que se queda es
+`_PACK_SESSION_MAX_TOTAL_BYTES`, que acumula entre varias peticiones y por eso
+ningún middleware puede contarlo — ese es el criterio para añadir otro.
 
 It used to be four numbers that disagreed: 10 MB announced by Flutter, 2 MB in
 the middleware (with a dead 11 MB override for the avatar), 10 MB again inside

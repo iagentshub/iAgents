@@ -10,7 +10,7 @@ la imagen resultante:
      standalone usaba el lock con hashes.
   2. Un workflow que no copie `dockerignore.unified` — Docker solo lee el
      `.dockerignore` de la RAÍZ del contexto, así que el de backend_fastapi no
-     aplica aquí y el `COPY backend/` se lleva tests/, docs/ y el .git dentro.
+     aplica aquí y el `COPY backend/` se lleva docs/, .git y basura del runner.
   3. Un workflow que instale Flutter con `channel: stable` a secas — compilaba
      la app con la versión que hubiera ese día, mientras el CI de app_flutter
      validaba otra fijada a mano. La imagen que se despliega salía de una
@@ -58,17 +58,38 @@ def test_dockerignore_unified_exists():
 
 
 def test_dockerignore_unified_whitelists_backend():
-    """La lista blanca del backend es lo que mantiene tests/ y .git fuera."""
+    """La lista blanca incluye runtime y tests, pero mantiene .git fuera."""
     contenido = (DOCKER_DIR / "dockerignore.unified").read_text()
     assert "backend/*" in contenido, (
         "Falta el patron 'backend/*': sin el, las lineas '!backend/...' no "
         "reincluyen nada y el directorio entra completo."
     )
-    for necesario in ("!backend/app", "!backend/main.py", "!backend/requirements.lock"):
+    for necesario in (
+        "!backend/app",
+        "!backend/tests",
+        "!backend/main.py",
+        "!backend/requirements.lock",
+    ):
         assert necesario in contenido, (
             f"Falta '{necesario}' en dockerignore.unified. Es lo minimo que el "
-            "contenedor necesita: supervisord arranca 'python /app/main.py'."
+            "contenedor necesita para arrancar y para ejecutar Centinel."
         )
+
+
+def test_dockerfile_unified_verifica_la_coleccion_de_centinel():
+    instrucciones = [
+        ln.strip()
+        for ln in (DOCKER_DIR / "Dockerfile.unified").read_text().splitlines()
+        if ln.strip() and not ln.lstrip().startswith("#")
+    ]
+    contenido = "\n".join(instrucciones)
+
+    assert "pytest /app/tests --collect-only" in contenido, (
+        "La imagen unificada no verifica durante el build que Centinel pueda "
+        "descubrir la suite empaquetada."
+    )
+    assert "PYTHONDONTWRITEBYTECODE=1" in contenido
+    assert "-p no:cacheprovider" in contenido
 
 
 def test_dockerfile_unified_instala_desde_el_lock():
@@ -163,7 +184,7 @@ def test_los_workflows_copian_el_dockerignore(repo):
         assert "dockerignore.unified" in wf.read_text(), (
             f"{repo}/.github/workflows/{wf.name} prepara un build-ctx pero no "
             "copia docker/dockerignore.unified como build-ctx/.dockerignore. "
-            "La imagen se publicaria con tests/, docs/ y el .git dentro, y "
+            "La imagen se publicaria con docs/, .git y basura del runner, y "
             "nada mas lo notaria."
         )
 
