@@ -7,6 +7,7 @@ import secrets
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from .console import IS_WINDOWS, error, info, warn
 
@@ -83,6 +84,14 @@ def check_docker() -> None:
         error("Docker no está en ejecución. Árrancalo e inténtalo de nuevo.")
 
 
+def check_docker_cli() -> None:
+    """Exige el cliente Docker sin exigir que el daemon esté arrancado."""
+    if not shutil.which("docker"):
+        error(
+            "Docker no está instalado. Descárgalo en https://docs.docker.com/get-docker/"
+        )
+
+
 def _ensure_env_secret(key: str, weak: tuple[str, ...] = ()) -> bool:
     """Da a `key` un secreto aleatorio en .env si falta, está vacío o es débil.
 
@@ -109,6 +118,54 @@ def _ensure_env_secret(key: str, weak: tuple[str, ...] = ()) -> bool:
 
     ENV_FILE.write_text("".join(lines), encoding="utf-8")
     return True
+
+
+def _set_env_var(key: str, value: str) -> None:
+    """Actualiza una variable persistida sin perder el resto del fichero."""
+    lines = ENV_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={value}\n"
+            break
+    else:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines.append(f"{key}={value}\n")
+    ENV_FILE.write_text("".join(lines), encoding="utf-8")
+
+
+def _sync_internal_database_url(password: str) -> bool:
+    """Mantiene la URL del PostgreSQL interno alineada con su contraseña."""
+    database_url = read_env_var(ENV_FILE, "DATABASE_URL")
+    if not database_url:
+        return False
+    try:
+        parsed = urlsplit(database_url)
+        port = parsed.port
+    except ValueError:
+        return False
+    if not (
+        parsed.scheme == "postgresql"
+        and parsed.username == "gaia"
+        and parsed.hostname == "postgres"
+        and parsed.path == "/iagentshub"
+    ):
+        return False
+
+    netloc = f"gaia:{quote(password, safe='')}@postgres"
+    if port is not None:
+        netloc += f":{port}"
+    synchronized = urlunsplit(parsed._replace(netloc=netloc))
+    if synchronized == database_url:
+        return False
+    _set_env_var("DATABASE_URL", synchronized)
+    return True
+
+
+def _protect_env_file() -> None:
+    """Limita los secretos persistidos al propietario en sistemas POSIX."""
+    if os.name != "nt":
+        ENV_FILE.chmod(0o600)
 
 
 def ensure_env() -> None:
@@ -144,6 +201,7 @@ def ensure_env() -> None:
 
     # Asegurar que GAIA_DB_PASSWORD tiene un valor no vacío/débil
     if _ensure_env_secret("GAIA_DB_PASSWORD", weak=("changeme",)):
+        _sync_internal_database_url(read_env_var(ENV_FILE, "GAIA_DB_PASSWORD"))
         info("GAIA_DB_PASSWORD actualizado con valor aleatorio en .env")
 
     # docker-compose.hub.yml declara WATCHTOWER_HTTP_API_TOKEN como variable
@@ -154,6 +212,8 @@ def ensure_env() -> None:
     # todas las instalaciones. Se genera igual que en install.sh.
     if _ensure_env_secret("WATCHTOWER_HTTP_API_TOKEN"):
         info("WATCHTOWER_HTTP_API_TOKEN generado en .env")
+
+    _protect_env_file()
 
 
 def get_port() -> str:

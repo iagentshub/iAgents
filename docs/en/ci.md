@@ -19,7 +19,10 @@ It checks three things:
 
 - **Installer** — analyses `install.sh` for common shell scripting errors.
 - **Management script** — checks that `gaia.py` compiles without syntax errors.
-- **Service configuration** — validates that `docker-compose.yml` has correct syntax and all services are properly defined.
+- **Service configuration** — runs `python3 gaia.py validate`, creates or
+  repairs `.env` with random secrets, and validates all five Compose files
+  without starting services. The development override is checked on top of the
+  base Compose file.
 
 To activate it, run once after cloning the repository:
 
@@ -37,6 +40,15 @@ From that point on it runs automatically on every `git commit`.
 Every time code is pushed to the main branch or a pull request is opened, GitHub runs the same checks in a clean environment. This acts as a safety net for changes that arrive without the local hook installed.
 
 A pull request cannot be merged if the checks fail.
+
+The same check can be run manually, without flags:
+
+```bash
+python3 gaia.py validate
+```
+
+`GAIA_DB_PASSWORD` remains available in `iAgents/.env`; Gaia does not print the
+secret and restricts the file to mode `0600` on Linux and macOS.
 
 ## Image publishing
 

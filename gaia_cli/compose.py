@@ -137,6 +137,7 @@ def cmd_start(compose: list[str], dev: bool, hub: bool) -> None:
 
 def cmd_stop(compose: list[str]) -> None:
     check_docker()
+    ensure_env()
     info("Deteniendo servicios...")
     subprocess.run(compose + ["down"], check=True)
     success("Servicios detenidos.")
@@ -149,6 +150,7 @@ def cmd_restart(compose: list[str], dev: bool, hub: bool) -> None:
 
 def cmd_logs(compose: list[str]) -> None:
     check_docker()
+    ensure_env()
     info("Mostrando logs (Ctrl+C para salir)...")
     try:
         subprocess.run(compose + ["logs", "-f", "--tail=100"], check=False)
@@ -188,6 +190,7 @@ def cmd_update(compose: list[str], dev: bool, hub: bool) -> None:
 
 def cmd_status(compose: list[str]) -> None:
     check_docker()
+    ensure_env()
     subprocess.run(compose + ["ps"], check=False)
 
 

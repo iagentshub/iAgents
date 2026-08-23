@@ -24,6 +24,7 @@ def test_gaia_es_un_wrapper_pequeno_y_los_dominios_estan_separados():
         "local_process",
         "compose",
         "build_push",
+        "validation",
         "cli",
     ):
         assert (REPO_ROOT / "gaia_cli" / f"{module}.py").is_file()
@@ -47,6 +48,21 @@ def test_entrypoint_conserva_la_ayuda_publica(args, expected):
     assert result.returncode == 0
     assert expected in result.stdout
     assert result.stderr == ""
+
+
+def test_help_documenta_validate_sin_flags_y_el_env_protegido():
+    result = subprocess.run(
+        [sys.executable, "gaia.py", "--help"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "validate Valida los cinco Compose" in result.stdout
+    assert "no admite flags" in result.stdout
+    assert "iAgents/.env (0600)" in result.stdout
 
 
 def test_cli_enruta_status_local_sin_docker(monkeypatch):
@@ -85,6 +101,27 @@ def test_start_con_docker_instalado_mantiene_compose(monkeypatch):
     cli.main()
 
     assert calls == [(["docker", "compose"], False, False)]
+
+
+def test_cli_enruta_validate_por_gaia(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sys, "argv", ["gaia.py", "validate"])
+    monkeypatch.setattr(cli.os, "chdir", lambda _: None)
+    monkeypatch.setattr(cli, "cmd_validate", lambda: calls.append("validate"))
+
+    cli.main()
+
+    assert calls == ["validate"]
+
+
+@pytest.mark.parametrize("flag", ["--dev", "--hub", "--local"])
+def test_cli_rechaza_flags_en_validate(monkeypatch, capsys, flag):
+    monkeypatch.setattr(sys, "argv", ["gaia.py", "validate", flag])
+
+    with pytest.raises(SystemExit, match="1"):
+        cli.main()
+
+    assert "validate no admite" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -143,7 +180,7 @@ def test_rutas_compartidas_siguen_apuntando_a_la_raiz_del_repo():
 def test_modo_local_propaga_el_tamano_del_pool_sqlite():
     source = (REPO_ROOT / "gaia_cli" / "local_process.py").read_text(encoding="utf-8")
     assert 'read_env_var(ENV_FILE, "GAIA_SQLITE_POOL_SIZE", "")' in source
-    assert 'if sqlite_pool_size:' in source
+    assert "if sqlite_pool_size:" in source
     assert 'backend_env["GAIA_SQLITE_POOL_SIZE"] = sqlite_pool_size' in source
 
 
@@ -173,6 +210,69 @@ def test_no_se_pisa_un_token_ya_generado(monkeypatch, tmp_path):
     common.ensure_env()
 
     assert common.read_env_var(env, "WATCHTOWER_HTTP_API_TOKEN") == "a" * 64
+
+
+def test_password_regenerada_sincroniza_la_url_del_postgresql_interno(
+    monkeypatch, tmp_path
+):
+    env = tmp_path / ".env"
+    env.write_text(
+        "DATABASE_URL=postgresql://gaia:changeme@postgres:5432/iagentshub\n"
+        "GAIA_DB_PASSWORD=changeme\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    password = common.read_env_var(env, "GAIA_DB_PASSWORD")
+    assert password != "changeme"
+    assert common.read_env_var(env, "DATABASE_URL") == (
+        f"postgresql://gaia:{password}@postgres:5432/iagentshub"
+    )
+
+
+def test_password_regenerada_no_reescribe_una_base_externa(monkeypatch, tmp_path):
+    env = tmp_path / ".env"
+    external_url = "postgresql://cliente:secreto@db.example.com:5432/produccion"
+    env.write_text(
+        f"DATABASE_URL={external_url}\nGAIA_DB_PASSWORD=changeme\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    assert common.read_env_var(env, "GAIA_DB_PASSWORD") != "changeme"
+    assert common.read_env_var(env, "DATABASE_URL") == external_url
+
+
+@pytest.mark.parametrize("command", ["cmd_stop", "cmd_logs", "cmd_status"])
+def test_comandos_docker_preparan_env_antes_de_compose(monkeypatch, command):
+    llamadas = []
+    monkeypatch.setattr(compose_mod, "check_docker", lambda: llamadas.append("docker"))
+    monkeypatch.setattr(compose_mod, "ensure_env", lambda: llamadas.append("env"))
+    monkeypatch.setattr(
+        compose_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: llamadas.append("compose"),
+    )
+
+    getattr(compose_mod, command)(["docker", "compose"])
+
+    assert llamadas[:3] == ["docker", "env", "compose"]
+
+
+@pytest.mark.skipif(common.os.name == "nt", reason="Windows gestiona permisos con ACL")
+def test_ensure_env_deja_los_secretos_solo_para_el_propietario(monkeypatch, tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("GAIA_DB_PASSWORD=" + "a" * 64 + "\n", encoding="utf-8")
+    env.chmod(0o644)
+    monkeypatch.setattr(common, "ENV_FILE", env)
+
+    common.ensure_env()
+
+    assert env.stat().st_mode & 0o777 == 0o600
 
 
 def test_env_sin_salto_final_no_pega_dos_variables(monkeypatch, tmp_path):

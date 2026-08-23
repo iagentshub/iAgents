@@ -13,11 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      # Los cinco, no solo el de por defecto: `docker compose config` a secas
-      # ignoraba los otros cuatro. Ver el script para las dos trampas (dev.yml
-      # es un override, y dos exigen variables a propósito).
+      # Pasa por gaia.py para crear o reparar .env con los mismos secretos
+      # aleatorios que usa un arranque real antes de validar los cinco Compose.
       - name: Validan los 5 composes
-        run: sh scripts/validar-composes.sh
+        run: python3 gaia.py validate
 
       - name: Shellcheck install.sh
         run: shellcheck install.sh

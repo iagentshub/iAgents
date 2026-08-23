@@ -82,6 +82,7 @@ python3 gaia.py start               # Docker + PostgreSQL; crea .env seguro si f
 python3 gaia.py start --hub         # Docker, imagen de GitHub Container Registry
 python3 gaia.py start --dev         # Docker, hot reload con código local
 python3 gaia.py start --local       # sin Docker (uvicorn + proxy Python)
+python3 gaia.py validate            # crea/repara .env y valida los cinco Compose
 
 python3 gaia.py push                # construir y subir la imagen React :latest
 
@@ -90,6 +91,9 @@ python3 gaia.py reset --local             # borra iAgents/data/ y reinstala desd
 ```
 
 > ⚠️ `reset` es **irreversible**: borra usuarios, agentes, skills, conexiones y todo el historial. Pide confirmación escrita (`RESET`) desde un terminal, y no hay forma de omitirla.
+
+Los secretos generados, incluida `GAIA_DB_PASSWORD`, se guardan en
+`iAgents/.env`. En Linux y macOS Gaia limita ese fichero a permisos `0600`.
 
 ---
 

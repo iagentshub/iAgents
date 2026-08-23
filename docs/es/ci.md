@@ -19,7 +19,9 @@ Verifica tres cosas:
 
 - **Instalador** — analiza `install.sh` en busca de errores comunes de shell scripting.
 - **Script de gestión** — comprueba que `gaia.py` compila sin errores de sintaxis.
-- **Configuración de servicios** — valida que `docker-compose.yml` tiene una sintaxis correcta y que todos los servicios están bien definidos.
+- **Configuración de servicios** — ejecuta `python3 gaia.py validate`, crea o
+  repara `.env` con secretos aleatorios y valida los cinco Compose sin arrancar
+  servicios. El override de desarrollo se comprueba sobre el Compose base.
 
 Para activarlo, ejecuta una vez tras clonar el repositorio:
 
@@ -37,6 +39,15 @@ A partir de ese momento se ejecuta automáticamente en cada `git commit`.
 Cada vez que se sube código a la rama principal o se abre una pull request, GitHub ejecuta las mismas verificaciones en un entorno limpio. Esto actúa como red de seguridad para cambios que lleguen sin el hook local instalado.
 
 Un pull request no puede fusionarse si las verificaciones fallan.
+
+La misma comprobación puede ejecutarse manualmente, sin flags:
+
+```bash
+python3 gaia.py validate
+```
+
+`GAIA_DB_PASSWORD` queda persistida en `iAgents/.env`; Gaia no imprime el
+secreto y restringe el fichero a permisos `0600` en Linux y macOS.
 
 ## Publicación de imágenes
 

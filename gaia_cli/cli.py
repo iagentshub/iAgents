@@ -26,6 +26,7 @@ from .local_process import (
     cmd_local_status,
     cmd_local_stop,
 )
+from .validation import cmd_validate
 
 
 def _print_local_usage() -> None:
@@ -58,6 +59,8 @@ def _print_docker_usage() -> None:
     print("  logs     Muestra los logs en tiempo real")
     print("  update   Actualiza a la última versión y reinicia")
     print("  status   Estado de los contenedores")
+    print("  validate Valida los cinco Compose, sin arrancarlos (no admite flags)")
+    print("           Genera iAgents/.env (0600) con secretos aleatorios si falta")
     print(
         "  push     Construye imágenes y las sube a GHCR  (requiere --hub o sin flag)"
     )
@@ -114,6 +117,11 @@ def main() -> None:
         error("--local y --hub son incompatibles.")
 
     command = positional[0] if positional else ""
+
+    if command == "validate" and (dev or local or hub):
+        error(
+            "validate no admite --dev, --hub ni --local: siempre valida los cinco Compose."
+        )
 
     # El arranque sin flags prefiere Docker. Si ni siquiera está instalado,
     # usa el modo local SQLite; un daemon instalado pero detenido sigue siendo
@@ -180,5 +188,7 @@ def main() -> None:
         cmd_push()
     elif command == "reset":
         cmd_reset(compose, dev, hub)
+    elif command == "validate":
+        cmd_validate()
     else:
         error(f"Comando desconocido: {command}. Usa: python3 gaia.py --help")
