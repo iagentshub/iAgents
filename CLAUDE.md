@@ -547,8 +547,30 @@ to read the `.sql` files.
 `tests/storage/test_sql_contra_motores.py` *prepares* every query against a
 real schema, which validates syntax, tables and columns without executing
 anything. SQLite always runs (445 of the 457 sections). PostgreSQL needs
-`GAIA_TEST_PG_DSN` and skips without it — **until someone runs it against a
-real database, those 12 PostgreSQL-only queries have never been tried**.
+`GAIA_TEST_PG_DSN` and skips without it — and while it skips, those 12
+PostgreSQL-only queries are never tried.
+
+**The compose stack already runs a PostgreSQL, so there is no excuse for
+skipping.** `iagents-postgres-1` publishes no port, so bridge it, create a
+throwaway database, and point the DSN at it:
+
+```bash
+docker run -d --rm --name pgbridge --network iagents_default -p 15432:5432 \
+  alpine/socat tcp-listen:5432,fork,reuseaddr tcp-connect:iagents-postgres-1:5432
+docker exec iagents-postgres-1 psql -U gaia -d iagentshub -c "CREATE DATABASE test_sql_motores;"
+export GAIA_TEST_PG_DSN="postgresql://gaia:$(docker exec iagents-postgres-1 printenv POSTGRES_PASSWORD)@127.0.0.1:15432/test_sql_motores"
+```
+
+**Not every query lives in `app/sql/`, and the catalogue only sees the ones that
+do.** `PUBLICLY_AVAILABLE_SQL` is built in `app/services/social_catalog.py` and
+carried `NOT inactive_resource.is_active`: `@BOOL@` is `INTEGER` in SQLite,
+which accepts it, and `SMALLINT` in PostgreSQL, which answers *argument of NOT
+must be type boolean* and turns the request into a 500. It took down the public
+profile — that screen asks for resources, profile and follow status at once, so
+one failure sinks all three. Two blind spots stacked on one line: a fragment
+only Python knows about, and a PostgreSQL run that skips by default.
+`_fragmentos_construidos_en_python()` in that same test file is where such a
+fragment gets registered, with the minimal wrapper that makes it preparable.
 
 Ver `docs/adr/007-sql-en-ficheros.md`.
 
