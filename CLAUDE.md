@@ -597,6 +597,38 @@ pidiéndolos habría dejado de funcionar. Dos guardas lo sostienen:
 `tests/api/test_grafo_en_un_sitio.py` y, en Flutter,
 `test/feature_architecture_test.dart`. Ver `docs/adr/010-el-grafo-se-arma-en-el-cliente.md`.
 
+### La foto de perfil vive en su propia tabla
+
+`user_avatars`, en bytes (`@BLOB@` → BLOB/BYTEA), no una columna de `users`.
+Era un TEXT con el fichero en base64 —un tercio más grande— dentro de la tabla
+que toca cada petición autenticada: `_USER_COLS` de `app/auth/user_lookup.py`
+tenía que excluirla a mano, y saber si alguien tenía foto obligaba a comparar el
+contenido (`avatar = ''`), que en PostgreSQL trae la imagen entera de su
+almacenamiento externo solo para ver si está vacía. La migración 39 la mudó y
+dropeó la columna.
+
+Tres cosas que se aprendieron mudándola:
+
+- **El catch-up legacy es `repeatable=True`**, así que corre en cada arranque.
+  Dropear una columna sin quitarla de su lista la recrea en el siguiente
+  arranque, en bucle y sin que nada falle. Pasó: la migración 40 es la 39 otra
+  vez —el paso es idempotente— porque las bases que corrieron la 39 mientras el
+  catch-up aún añadía la columna se quedaron con ella vacía para siempre, y una
+  migración ya aplicada no vuelve a ejecutarse sola.
+- **La versión de la URL es el `checksum`**, no un contador del cliente. El que
+  había vivía en memoria de Flutter y volvía a cero al reconstruirse la
+  pantalla, con lo que la URL reaparecía apuntando a la foto anterior. Ahora
+  `GET …/avatar` sirve `ETag` + `Cache-Control: private, must-revalidate` y
+  responde 304.
+- **Nombrar la columna `owner_id` mete la tabla en el radar del guard de RGPD**
+  automáticamente (`tests/auth/test_gdpr_cobertura.py`), que exige su `DELETE` y
+  su exportación. Un `user_id` habría pasado desapercibido.
+
+Subir avatar lleva `RateLimiter` **y** `Semaphore(1)`, el mismo par que la
+transferencia de binarios de las tools: el cliente comprime a 512 px antes de
+enviar, pero un `curl` no pasa por ahí y `max_request_bytes` vale 0 —sin
+límite— mientras el administrador no diga otra cosa.
+
 ### The two sides of GDPR read the same table list
 
 Deletion is `app/sql/queries/gdpr.sql` (27 `DELETE`s, run by
@@ -788,6 +820,12 @@ A `ponytail:` comment marks a **deliberate** simplification with a known
 ceiling, and names the ceiling so the next reader doesn't mistake it for an
 oversight (`ratelimit.py`, `tokens.py`, `flog.py`, plus one each in Flutter and
 the VS Code extension — `grep -rn "ponytail:"` finds them). It is not a TODO.
+
+**Ningún fichero de `app/` pasa de 600 líneas**, y lo vigila
+`tests/test_tamano_de_ficheros.py`. Los siete que ya estaban por encima cuando
+se puso la guarda están en su `DEUDA` con la medida de ese día **como techo**:
+no pueden crecer más, y su entrada se borra al partirlos. Esa frase estuvo
+escrita sin nada que la sostuviera y envejeció sola — de ahí el test.
 
 **A blind `except Exception` either logs with context or does not exist.** ruff
 enforces this (`BLE001`, `S110`, `S112` are in the `select` list). When the
