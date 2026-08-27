@@ -147,7 +147,16 @@ fail on files you may not think you touched:
   too, which hid every undeclared key — it looked right in Spanish and stayed
   Spanish in English. 50 had slipped through, including the activate/deactivate
   buttons on four screens. A missing key now shows the **id** and warns in the
-  console. **Do not copy React's locale files here**: React has its own
+  console. **The first segment of an id is the namespace the key lives in**:
+  `tr('auth.identifier_required')` resolves only while `auth` is loaded, and a
+  screen loads its own namespace, not all five. Eight `auth.*` keys and six
+  `common.*` ones sat in `resources.json`, so the login screen printed the id
+  in the username field and in the «coming soon» tooltip — the existence check
+  never saw it, because it merges the six files into one set and forgets which
+  one each key came from. The second guard in that same file is what notices,
+  and it only looks at `tr()`/`trOr()`: the other three forms carry the page's
+  bundle in front, so a key of theirs is found there whatever its prefix says.
+  **Do not copy React's locale files here**: React has its own
   frozen list, and that is where this came from. The conventions are in
   `app_flutter/CLAUDE.md`.
 - `feature_architecture_test.dart` — among other things, **a dialog is opened
@@ -233,6 +242,19 @@ React; **everything behind a login is Flutter**. Legacy public paths 308 to
 When you add a public route, it belongs in React. When you add an app screen,
 it belongs in Flutter. Putting an authenticated route in React trips
 `public:verify`.
+
+**In dev there is no nginx.** `docker-compose.dev.yml` runs Vite's dev server in
+that container, and it proxies `/api/` itself — so anything you reason about
+from `nginx.react.conf` is not what answers your request while developing. Vite
+also used to answer the CORS preflight before the proxy saw it, and without
+`Access-Control-Allow-Credentials`: Flutter's browser client sends
+`withCredentials = true`, so the browser aborted there and the login POST never
+left — no request in the backend log at all, and in Dart a network error with no
+body and no stack, visible only in the browser console. `server.cors: false` in
+`vite.config.ts` hands the preflight back to the backend, which is the one that
+owns `GAIA_CORS_ORIGINS` and the anti-CSRF check. Running the app with
+`flutter run` puts it on a different port, so that origin has to be declared:
+`GAIA_CORS_ORIGINS` in `iAgents/.env`, passed through by `docker-compose.dev.yml`.
 
 The two directions cross exactly once: **the legal pages**. Privacy and terms
 are React (`/privacy`, `/terms`, plus `/en/…`), but Flutter's register screen

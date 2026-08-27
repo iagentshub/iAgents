@@ -76,6 +76,13 @@ services:
     environment:
       GAIA_RELOAD: "true"
       GAIA_FRONTEND_URL: "${GAIA_FRONTEND_URL:-http://localhost:8007}"
+      # `flutter run` sirve la web en un puerto propio, así que su origen no
+      # es el del stack: sin declararlo aquí, CsrfMiddleware responde 403
+      # csrf_origin_rejected a todo POST —el login incluido— y la app parece
+      # no llegar al servidor. Va aparte de GAIA_FRONTEND_URL porque esa
+      # también decide las cabeceras de seguridad y el flag `secure` de las
+      # cookies, y no admite una lista.
+      GAIA_CORS_ORIGINS: "${GAIA_CORS_ORIGINS:-http://localhost:8007}"
       GAIA_REGISTRATION: "open"
       GAIA_ADMIN_EMAIL: "admin@localhost.com"
       GAIA_ADMIN_USERNAME: "admin"
