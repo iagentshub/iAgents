@@ -1,9 +1,8 @@
 """Guards del contexto de build de la imagen unificada.
 
-Tres repositorios publican `ghcr.io/iagentshub/app` desde el mismo
-`docker/Dockerfile.unified`, cada uno con su propio paso «Preparar contexto de
-build». Los dos fallos que cubren estos tests no rompen el build ni se ven en
-la imagen resultante:
+Solo iAgents publica `ghcr.io/iagentshub/app` desde
+`docker/Dockerfile.unified`. Los fallos que cubren estos tests no rompen el
+build ni se ven en la imagen resultante:
 
   1. Instalar desde `requirements.txt` en vez de `requirements.lock` — la
      imagen que se despliega quedaba con rangos flotantes mientras la
@@ -121,8 +120,8 @@ def test_gaia_build_push_compila_la_web_con_el_script():
     el bloque `location ^~ /app/` no lo permite — la aplicación autenticada
     sale en blanco, sin error visible ni test que falle.
 
-    `web_bundle_budget_test.dart` ya vigila lo mismo en los workflows, pero
-    solo mira ficheros de `.github/workflows`: `gaia build-push` es el cuarto
+    `web_bundle_budget_test.dart` ya vigila lo mismo en app_flutter, pero solo
+    mira ficheros de ese repositorio: `gaia build-push` es otro
     camino que construye la imagen y se quedaba fuera. Publicó imágenes con la
     web rota mientras los tres workflows la compilaban bien.
     """
@@ -169,6 +168,22 @@ def test_gaia_build_push_copia_el_dockerignore():
     )
 
 
+def test_iagents_es_el_unico_workflow_que_publica_la_imagen_unificada():
+    publicadores = []
+    for repo in ("iAgents", *REPOS_HERMANOS):
+        raiz = REPO_ROOT if repo == "iAgents" else _repo_dir(repo)
+        if not raiz.is_dir():
+            continue
+        for workflow in (raiz / ".github" / "workflows").glob("*.yml"):
+            if "ghcr.io/iagentshub/app:latest" in workflow.read_text():
+                publicadores.append((repo, workflow.name))
+
+    assert publicadores == [("iAgents", "docker-publish.yml")], (
+        "latest tiene que tener una sola fuente de verdad; varios workflows "
+        f"pueden sobreescribirlo fuera de orden: {publicadores}"
+    )
+
+
 @pytest.mark.parametrize("repo", ["iAgents", *REPOS_HERMANOS])
 def test_los_workflows_copian_el_dockerignore(repo):
     """Todo workflow que prepare un build-ctx tiene que copiar el ignore."""
@@ -193,11 +208,9 @@ def test_los_workflows_copian_el_dockerignore(repo):
 def test_flutter_se_instala_con_la_version_del_pubspec(repo):
     """La versión de Flutter vive en app_flutter/pubspec.yaml y solo ahí.
 
-    Los tres repos compilan la misma app: este y backend_fastapi hacen checkout
-    de app_flutter para construir la imagen unificada, y app_flutter lo hace en
-    su propio CI. Cuando cada uno decidía su versión por su cuenta, la que
-    llegaba a producción y la que se validaba eran distintas sin que nada
-    fallara.
+    iAgents construye la imagen unificada y app_flutter valida su propio codigo.
+    Cuando cada uno decidia su version por su cuenta, la que llegaba a
+    produccion y la que se validaba eran distintas sin que nada fallara.
     """
     raiz = REPO_ROOT if repo == "iAgents" else _repo_dir(repo)
     if not raiz.is_dir():
@@ -220,7 +233,9 @@ def test_flutter_se_instala_con_la_version_del_pubspec(repo):
             "flutter-version-file: toma la version de 'channel: stable', que "
             "cambia sola, o una escrita a mano que se separa del pubspec."
         )
-        assert not re.search(r"^\s*flutter-version:\s*\d", contenido, re.M), (
+        assert not re.search(
+            r"^\s*flutter-version:\s*\d", contenido, re.MULTILINE
+        ), (
             f"{repo}/.github/workflows/{wf.name} fija la version de Flutter a "
             "mano. La fuente es 'environment: flutter:' de app_flutter/"
             "pubspec.yaml; escrita aqui, las dos se separan en silencio."
@@ -234,8 +249,10 @@ def test_el_pubspec_de_app_flutter_fija_una_version_exacta():
     if not pubspec.is_file():
         pytest.skip("app_flutter no esta clonado junto a este repositorio")
 
-    assert re.search(r"^\s*flutter:\s*\d+\.\d+\.\d+\s*$", pubspec.read_text(), re.M), (
+    assert re.search(
+        r"^\s*flutter:\s*\d+\.\d+\.\d+\s*$", pubspec.read_text(), re.MULTILINE
+    ), (
         "app_flutter/pubspec.yaml tiene que declarar 'flutter: X.Y.Z' exacto "
-        "dentro de 'environment'. Es lo que leen los tres workflows, y la "
+        "dentro de 'environment'. Es lo que leen los workflows, y la "
         "action exige una version exacta, no un rango."
     )

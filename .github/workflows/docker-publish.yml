@@ -4,6 +4,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: unified-image-publish
+  cancel-in-progress: false
+
 on:
   push:
     branches: [main]
@@ -18,12 +22,28 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.decide.outputs.build }}
+      backend_sha: ${{ steps.revisions.outputs.backend_sha }}
+      frontend_sha: ${{ steps.revisions.outputs.frontend_sha }}
+      app_sha: ${{ steps.revisions.outputs.app_sha }}
+      orchestrator_sha: ${{ steps.revisions.outputs.orchestrator_sha }}
     steps:
+      - name: Checkout del orquestador
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Resolver revisiones exactas de main
+        id: revisions
+        run: python3 scripts/verified_revisions.py resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Comprobar si la imagen ya contiene los repos actuales
         id: decide
         env:
           EVENT_NAME: ${{ github.event_name }}
           IMAGE: ghcr.io/iagentshub/app:latest
+          BACKEND_SHA: ${{ steps.revisions.outputs.backend_sha }}
+          FRONTEND_SHA: ${{ steps.revisions.outputs.frontend_sha }}
+          APP_SHA: ${{ steps.revisions.outputs.app_sha }}
         run: |
           if [ "$EVENT_NAME" != "schedule" ]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -35,9 +55,9 @@ jobs:
           current_frontend=$(printf '%s' "$image_json" | jq -r '."linux/amd64".config.Env[]? | select(startswith("FRONTEND_COMMIT=")) | split("=")[1]' | head -n1)
           current_app=$(printf '%s' "$image_json" | jq -r '."linux/amd64".config.Env[]? | select(startswith("APP_COMMIT=")) | split("=")[1]' | head -n1)
 
-          expected_backend=$(git ls-remote https://github.com/iagentshub/backend_fastapi.git refs/heads/main | cut -c1-7)
-          expected_frontend=$(git ls-remote https://github.com/iagentshub/frontend_react.git refs/heads/main | cut -c1-7)
-          expected_app=$(git ls-remote https://github.com/iagentshub/app_flutter.git refs/heads/main | cut -c1-7)
+          expected_backend=${BACKEND_SHA:0:7}
+          expected_frontend=${FRONTEND_SHA:0:7}
+          expected_app=${APP_SHA:0:7}
 
           if [ "$current_backend" = "$expected_backend" ] && \
              [ "$current_frontend" = "$expected_frontend" ] && \
@@ -46,6 +66,21 @@ jobs:
           else
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Esperar los checks de los SHAs empaquetados
+        if: steps.decide.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKEND_SHA: ${{ steps.revisions.outputs.backend_sha }}
+          FRONTEND_SHA: ${{ steps.revisions.outputs.frontend_sha }}
+          APP_SHA: ${{ steps.revisions.outputs.app_sha }}
+          ORCHESTRATOR_SHA: ${{ steps.revisions.outputs.orchestrator_sha }}
+        run: |
+          python3 scripts/verified_revisions.py verify \
+            --require "backend_fastapi:$BACKEND_SHA:test" \
+            --require "frontend_react:$FRONTEND_SHA:verify" \
+            --require "app_flutter:$APP_SHA:validate" \
+            --require "iAgents:$ORCHESTRATOR_SHA:validate"
 
   # Cambios en la orquestación (Dockerfile.unified*, gaia.py/gaia_cli, entrypoints) afectan a
   # ambas variantes de la imagen unificada — se reconstruyen y publican las dos.
@@ -59,24 +94,28 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: iagentshub/iAgents
+          ref: ${{ needs.preflight.outputs.orchestrator_sha }}
           path: iagentshub
 
       - name: Checkout backend
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: iagentshub/backend_fastapi
+          ref: ${{ needs.preflight.outputs.backend_sha }}
           path: backend
 
       - name: Checkout frontend
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: iagentshub/frontend_react
+          ref: ${{ needs.preflight.outputs.frontend_sha }}
           path: frontend
 
       - name: Checkout Flutter app
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: iagentshub/app_flutter
+          ref: ${{ needs.preflight.outputs.app_sha }}
           path: app_flutter
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
@@ -134,9 +173,11 @@ jobs:
       - name: Obtener SHAs de backend, frontend y app
         id: shas
         run: |
-          echo "backend=$(git -C backend rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "frontend=$(git -C frontend rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "app=$(git -C app_flutter rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          {
+            echo "backend=$(git -C backend rev-parse --short HEAD)"
+            echo "frontend=$(git -C frontend rev-parse --short HEAD)"
+            echo "app=$(git -C app_flutter rev-parse --short HEAD)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build y push imagen multi-plataforma
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25

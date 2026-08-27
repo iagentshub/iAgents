@@ -58,4 +58,9 @@ jobs:
         run: python3 -m compileall -q gaia.py gaia_cli
 
       - name: Ruff gaia.py y sus módulos
-        run: pipx run ruff check gaia.py gaia_cli
+        run: >-
+          pipx run ruff check gaia.py gaia_cli scripts/verified_revisions.py
+          tests/test_verified_revisions.py tests/test_docker_contexto.py
+
+      - name: Tests de la orquestacion de despliegues
+        run: pipx run pytest -q tests/test_verified_revisions.py
