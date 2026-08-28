@@ -1,0 +1,28 @@
+services:
+  iagentshub:
+    environment:
+      # La VM de producción tiene 1 vCPU y 1 GB de RAM. Un solo worker evita
+      # que cuatro procesos FastAPI agoten la memoria disponible.
+      GAIA_WORKERS: "1"
+      GAIA_LLM_MAX_THREADS: "4"
+    mem_limit: 550m
+
+  postgres:
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=50
+    mem_limit: 256m
+
+  # En producción las actualizaciones las controla GitHub Actions con una
+  # etiqueta inmutable y rollback. Estos servicios solo se arrancan si se
+  # solicita expresamente el perfil manual-updates.
+  watchtower:
+    profiles: ["manual-updates"]
+    mem_limit: 128m
+
+  docker-proxy:
+    profiles: ["manual-updates"]
+    mem_limit: 64m

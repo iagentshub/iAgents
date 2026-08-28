@@ -88,6 +88,8 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.build == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: react-${{ steps.version.outputs.value }}
 
     steps:
       - name: Checkout iagentshub (Dockerfile + scripts)
@@ -195,3 +197,73 @@ jobs:
             ghcr.io/iagentshub/app:react-${{ steps.version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy-production:
+    name: Desplegar en producción
+    needs: [preflight, docker-react]
+    if: needs.preflight.outputs.build == 'true' && needs.docker-react.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      BASTION_HOST: 93.189.91.66
+      TARGET_HOST: 10.20.10.5
+      BASTION_USER: jarivi
+      TARGET_USER: iagentshub-deploy
+      DEPLOY_PATH: /opt/iagentshub
+      IMAGE_TAG: ${{ needs.docker-react.outputs.image_tag }}
+
+    steps:
+      - name: Descargar el orquestador verificado
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.preflight.outputs.orchestrator_sha }}
+
+      - name: Configurar SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' \
+            'Host iagentshub-bastion' \
+            "  HostName $BASTION_HOST" \
+            "  User $BASTION_USER" \
+            '  IdentityFile ~/.ssh/id_ed25519' \
+            '  IdentitiesOnly yes' \
+            "  HostKeyAlias $BASTION_HOST" \
+            '  StrictHostKeyChecking yes' \
+            '  UserKnownHostsFile ~/.ssh/known_hosts' \
+            '' \
+            'Host iagentshub-target' \
+            "  HostName $TARGET_HOST" \
+            "  User $TARGET_USER" \
+            '  IdentityFile ~/.ssh/id_ed25519' \
+            '  IdentitiesOnly yes' \
+            "  HostKeyAlias $TARGET_HOST" \
+            '  ProxyJump iagentshub-bastion' \
+            '  StrictHostKeyChecking yes' \
+            '  UserKnownHostsFile ~/.ssh/known_hosts' \
+            > ~/.ssh/config
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts ~/.ssh/config
+
+      - name: Transferir la configuración de producción
+        run: |
+          ssh iagentshub-target \
+            "test -d '$DEPLOY_PATH' && test -w '$DEPLOY_PATH'"
+          scp docker-compose.hub.yml \
+            "iagentshub-target:$DEPLOY_PATH/docker-compose.yml"
+          scp deploy/compose.production.override.yml \
+            "iagentshub-target:$DEPLOY_PATH/compose.production.override.yml"
+          scp deploy/deploy.sh \
+            "iagentshub-target:$DEPLOY_PATH/deploy.sh"
+
+      - name: Activar la imagen inmutable
+        run: |
+          ssh iagentshub-target \
+            "cd '$DEPLOY_PATH' && chmod 700 deploy.sh && ./deploy.sh '$IMAGE_TAG'"
