@@ -9,12 +9,30 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 API_ROOT = "https://api.github.com"
 ORGANIZATION = "iagentshub"
 REPOSITORIES = ("backend_fastapi", "frontend_react", "app_flutter", "iAgents")
+
+# El job que cada repositorio tiene que tener en verde. Vive aquí y no en el
+# YAML porque `resolve` lo necesita para retroceder, y dos copias divergen:
+# test_checks_declarados_una_sola_vez compara esta tabla con el workflow.
+CHECKS = {
+    "backend_fastapi": "test",
+    "frontend_react": "verify",
+    "app_flutter": "validate",
+    "iAgents": "validate",
+}
+
+# Cuánto se tolera publicar por detrás de main cuando el CI de un repo está
+# roto. Sin tope, un repositorio con el CI averiado varios días seguiría
+# publicando su versión antigua sin que nadie lo note: se cambiaría un fallo
+# ruidoso —la imagen se congela— por uno callado, que es peor.
+MAX_COMMITS_ATRAS = 20
+MAX_HORAS_ATRAS = 24
 
 
 # Un repositorio privado no responde 403 al token que no lo alcanza: responde
@@ -97,6 +115,40 @@ class GitHubAPI:
         return "failure"
 
 
+    def commits_de_main(self, repository: str) -> list[dict[str, Any]]:
+        return list(
+            self.get(
+                f"/repos/{ORGANIZATION}/{repository}/commits"
+                f"?sha=main&per_page={MAX_COMMITS_ATRAS}"
+            )
+        )
+
+    def ultimo_verde(self, repository: str, check_name: str) -> tuple[str, int, float]:
+        """El commit de main más reciente cuyo job está en verde.
+
+        Devuelve (sha, commits_atras, horas_atras). El HEAD es commits_atras=0.
+        """
+        commits = self.commits_de_main(repository)
+        if not commits:
+            raise RuntimeError(f"{repository}: main no devolvio commits")
+        cabeza = _fecha(commits[0])
+        for posicion, commit in enumerate(commits):
+            sha = str(commit["sha"])
+            if self.check_state(repository, sha, check_name) != "success":
+                continue
+            horas = (cabeza - _fecha(commit)).total_seconds() / 3600
+            return sha, posicion, horas
+        raise RuntimeError(
+            f"{repository}: ninguno de los ultimos {len(commits)} commits de main "
+            f"supero el check {check_name}"
+        )
+
+
+def _fecha(commit: dict[str, Any]) -> datetime:
+    marca = commit["commit"]["committer"]["date"]
+    return datetime.fromisoformat(marca.replace("Z", "+00:00"))
+
+
 def write_outputs(values: dict[str, str], output_path: str | None) -> None:
     if not output_path:
         return
@@ -104,12 +156,46 @@ def write_outputs(values: dict[str, str], output_path: str | None) -> None:
         output.writelines(f"{key}={value}\n" for key, value in values.items())
 
 
+def revision(api: GitHubAPI, repository: str) -> str:
+    """El commit de `repository` que entra en la imagen.
+
+    Normalmente el HEAD de main. Cuando su check está en rojo, el último verde:
+    `verify` exige los cuatro en verde, así que un test caducado en cualquiera
+    de ellos congelaba la imagen entera —incluidos los cambios ya validados de
+    los otros tres—. Pasó el 30/08: un test con una fecha fija salió de su
+    ventana de 90 días, y entre ese push y el arreglo no se publicó nada
+    durante casi doce horas.
+
+    Un check `pending` NO retrocede, y esa distinción es el punto entero: el
+    aviso de cada repo llega con su CI todavía en curso, así que tomar «el
+    último verde» a secas publicaría el commit anterior en cada push y dejaría
+    el aviso sin efecto. Retroceder es el remedio ante un rojo, no la política.
+    """
+    sha = api.main_sha(repository)
+    check = CHECKS[repository]
+    if api.check_state(repository, sha, check) != "failure":
+        return sha
+
+    verde, atras, horas = api.ultimo_verde(repository, check)
+    if horas > MAX_HORAS_ATRAS:
+        raise RuntimeError(
+            f"{repository}: el ultimo commit de main con {check} en verde es "
+            f"{verde[:7]}, {horas:.0f} h por detras (tope {MAX_HORAS_ATRAS} h). "
+            "Publicar una version tan vieja en silencio es peor que no publicar"
+        )
+    print(
+        f"::warning::{repository}: main@{sha[:7]} tiene {check} en rojo; "
+        f"se publica {verde[:7]}, {atras} commits y {horas:.1f} h por detras"
+    )
+    return verde
+
+
 def resolve(api: GitHubAPI) -> dict[str, str]:
     values = {
-        "backend_sha": api.main_sha("backend_fastapi"),
-        "frontend_sha": api.main_sha("frontend_react"),
-        "app_sha": api.main_sha("app_flutter"),
-        "orchestrator_sha": api.main_sha("iAgents"),
+        "backend_sha": revision(api, "backend_fastapi"),
+        "frontend_sha": revision(api, "frontend_react"),
+        "app_sha": revision(api, "app_flutter"),
+        "orchestrator_sha": revision(api, "iAgents"),
     }
     for name, sha in values.items():
         print(f"{name}={sha}")
