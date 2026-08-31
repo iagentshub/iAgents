@@ -12,9 +12,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Cada repo empaquetado avisa aquí en cuanto su CI pasa en main (ver el paso
+  # "Avisar a iAgents" de sus workflows, con IAGENTS_DISPATCH_TOKEN). Su
+  # GITHUB_TOKEN no puede disparar este workflow, y el cron de abajo GitHub lo
+  # atrasa de 3 a 7 h pese a estar declarado horario: un cambio que solo tocara
+  # app_flutter tardaba media tarde en llegar a la imagen desplegada.
+  repository_dispatch:
+    types: [upstream-push]
   schedule:
-    # Los repos empaquetados son independientes y sus GITHUB_TOKEN no pueden
-    # disparar este workflow. Esta comprobación recoge sus cambios sin PAT.
+    # Respaldo del aviso de arriba: recoge los cambios igual si el PAT caduca o
+    # si un repo se queda sin el secreto.
     - cron: "37 * * * *"
 
 jobs:
@@ -45,10 +52,13 @@ jobs:
           FRONTEND_SHA: ${{ steps.revisions.outputs.frontend_sha }}
           APP_SHA: ${{ steps.revisions.outputs.app_sha }}
         run: |
-          if [ "$EVENT_NAME" != "schedule" ]; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          # El aviso se compara igual que el cron: tres repos empujando a la
+          # vez mandan tres avisos, y sin esto salían tres builds y tres
+          # despliegues de la misma imagen.
+          case "$EVENT_NAME" in
+            schedule|repository_dispatch) ;;
+            *) echo "build=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
 
           image_json=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Image}}' 2>/dev/null || true)
           current_backend=$(printf '%s' "$image_json" | jq -r '."linux/amd64".config.Env[]? | select(startswith("BACKEND_COMMIT=")) | split("=")[1]' | head -n1)
