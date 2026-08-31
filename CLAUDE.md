@@ -806,6 +806,18 @@ espejo**, mantenida por el upsert. Separarlas hace que el `COUNT` responda por
 un estado que ya no existe, y eso lo vigila
 `tests/storage/test_agente_conexion_columna.py`.
 
+**Hay dos motores keyset y no son el mismo escrito dos veces.**
+`cursor_page_query` usa comparación de tupla, `(posicion, id) < (?, ?)`, que es
+lo que SQLite y PostgreSQL resuelven con un solo descenso por el índice
+compuesto —en SQLite el plan pasa de `SCAN` a `SEARCH … USING INDEX`—, y solo
+vale cuando todas las columnas del orden van en la misma dirección: es el caso
+de los listados calientes (agentes, skills, prompts, herramientas,
+conocimiento). `composite_cursor_page` expande a `(a<?) OR (a=? AND b<?) OR …`
+porque sus consumidores mezclan direcciones (`sort_at DESC, resource_type ASC,
+item_id ASC`), y SQL no admite tupla con órdenes mixtos. **Los dos devuelven
+exactamente las mismas filas**, así que cambiar uno por otro no rompe ningún
+test: solo degrada el plan, en silencio. Antes de fundirlos, mide.
+
 **Y el arreglo de verdad estaba en el inventario, no en el listado.** Retirar
 los once dejó a la vista que `/api/v2/admin/explore` —el que el panel sí pide,
 desde que sus pestañas se migraron— arrastraba los mismos defectos que este
