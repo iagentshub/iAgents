@@ -17,3 +17,6 @@ __pycache__/
 
 # Cuarentena: scripts/código sin referencias activas, conservados por si acaso
 old/
+
+# Local Graphify index
+graphify-out/
