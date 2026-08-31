@@ -13,7 +13,7 @@ There is no umbrella repo, no submodules, no workspace file.
 | Directory | What it is |
 |---|---|
 | `backend_fastapi/` | FastAPI. The only server. Python 3.12 in the image, 3.11 locally. |
-| `frontend_react/` | React 19 / Vite / TS. **Public pages only** — landing, pricing, docs, about, support. Also the nginx image that fronts everything. |
+| `frontend_react/` | React 19 / Vite / TS. **Public pages only** — landing, pricing, docs, about, support. Also the nginx image that fronts everything. **El único repositorio privado**: el workflow que publica la imagen lo lee con `REPO_READ_TOKEN`, ver más abajo. |
 | `app_flutter/` | Dart 3 / Flutter. The **entire authenticated app**, served under `/app/`. |
 | `vs_code/` | VS Code extension. Talks to the backend with a PAT. |
 | `iAgents/` | Orchestrator: `gaia.py`, `install.sh`, `install.ps1`, the compose files. Ships no product code — **and holds the live data** under `data/` (`hub.db`, `settings.json`), which is gitignored. |
@@ -320,6 +320,39 @@ under the unified image supervisord runs `python /app/main.py` directly.
 `build_push.py` — prepares a context without copying the ignore, or if the
 Dockerfile goes back to `requirements.txt`. It reaches the sibling clones the way `test_backend.py` does
 and skips the ones that are not there.
+
+**`frontend_react` es privado, y por eso el workflow necesita un token que no
+es el suyo.** El `GITHUB_TOKEN` de `iAgents` solo alcanza a `iAgents`: mientras
+los cuatro repositorios fueron públicos la API de GitHub respondía sin
+credencial, así que nadie se dio cuenta de que el acceso no venía del token.
+Al privatizar uno, `verified_revisions.py resolve` empezó a morir con **404 —no
+403—** en el primer paso del `preflight`, y con él los cuatro repos: diez runs
+seguidos en rojo, ninguna imagen publicada en 28 h, y lo único que lo decía era
+la pestaña Actions. El secreto es `REPO_READ_TOKEN`, en `iAgents`, y necesita
+**lectura de contenido y de Actions** sobre el repositorio privado: solo con la
+primera, `resolve` pasa y es `verify` quien falla, más tarde y en otro sitio.
+Lo usan los dos pasos que llaman a `verified_revisions.py` y el `checkout` de
+`frontend_react`; sin el secreto se cae de vuelta al token propio y vuelve el
+404, que es lo correcto mientras la imagen no se pueda construir sin ese código.
+
+**Y «de Actions», no «de checks», porque el permiso `Checks` no se le puede dar
+a un PAT.** `verify` leía `/commits/{sha}/check-runs` — la Checks API, que
+GitHub reservó a las GitHub Apps y retiró de la lista de permisos de los PAT
+fine-grained. Con los cuatro repos públicos daba igual; con uno privado no
+existía credencial acotada capaz de verificarlo, y el único PAT que servía era
+uno clásico con scope `repo`, es decir escritura sobre todo. `check_state` pide
+ahora `/actions/runs?head_sha=…` y los `/jobs` de cada run: **los cuatro checks
+exigidos son jobs de Actions**, así que la respuesta es la misma y el permiso
+`Actions: read` sí es asignable. Cuesta una llamada más por workflow run.
+`test_no_se_pide_la_checks_api_que_un_pat_no_puede_leer` impide volver.
+
+Y no se puede: de `frontend_react` la imagen no toma solo las páginas públicas,
+toma **`nginx.react.conf`, que es el servidor entero** — el `proxy_pass` a
+`/api/`, el `location ^~ /app/` con su CSP, `/env.js` y los 308 legacy. Una
+imagen construida sin ese repositorio no se queda sin landing: se queda sin
+servir la app Flutter y sin API. Hacer el repositorio opcional pasa antes por
+mudar ese fichero a `iAgents`, junto al Dockerfile y el supervisord, que es
+donde le corresponde estar.
 
 ### Authorization is four dependencies
 
