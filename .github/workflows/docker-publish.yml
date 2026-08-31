@@ -288,3 +288,61 @@ jobs:
         run: |
           ssh iagentshub-target \
             "cd '$DEPLOY_PATH' && chmod 700 deploy.sh && ./deploy.sh '$IMAGE_TAG'"
+
+  # Un cron o un aviso que falla no se lo cuenta a nadie: el 30/08 la cadena
+  # estuvo casi doce horas en rojo, con tres ejecuciones programadas fallidas y
+  # ninguna imagen publicada, y se descubrió por casualidad mirando Actions. Un
+  # push tiene dueño mirándolo; estos dos eventos no, y son los que mantienen
+  # viva la imagen. La issue se reutiliza en vez de duplicarse: tres schedules
+  # fallidos seguidos son tres issues del mismo problema, y ese ruido se aprende
+  # a ignorar igual que el warning que este trabajo vino a quitar.
+  senal-de-la-cadena:
+    name: Señal cuando la cadena queda parada
+    needs: [preflight, docker-react, deploy-production]
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'repository_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TITULO: "La imagen unificada no se está publicando"
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RESULTADOS: "preflight=${{ needs.preflight.result }} docker-react=${{ needs.docker-react.result }} deploy=${{ needs.deploy-production.result }}"
+    steps:
+      - name: Abrir, actualizar o cerrar la issue
+        run: |
+          numero=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title $TITULO" --json number,title \
+            --jq "map(select(.title == env.TITULO)) | first | .number // empty")
+
+          case "$RESULTADOS" in
+            *failure*|*cancelled*) roto=1 ;;
+            *) roto=0 ;;
+          esac
+
+          if [ "$roto" = "0" ]; then
+            # Una issue que sigue abierta después de arreglarse es el mismo
+            # ruido por el otro lado.
+            if [ -n "$numero" ]; then
+              gh issue close "$numero" --repo "$GITHUB_REPOSITORY" \
+                --comment "La cadena vuelve a publicar: $RUN_URL"
+            fi
+            exit 0
+          fi
+
+          cuerpo=$(printf '%s\n' \
+            "La cadena que publica la imagen desplegada falló en un evento" \
+            "desatendido ($GITHUB_EVENT_NAME), así que nadie la está mirando." \
+            "" \
+            "- Ejecución: $RUN_URL" \
+            "- Resultados: $RESULTADOS" \
+            "" \
+            "Mientras siga en rojo, la imagen desplegada se queda atrás respecto" \
+            "a main sin que falle nada visible.")
+
+          if [ -n "$numero" ]; then
+            gh issue comment "$numero" --repo "$GITHUB_REPOSITORY" --body "$cuerpo"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body "$cuerpo"
+          fi

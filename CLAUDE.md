@@ -354,6 +354,60 @@ servir la app Flutter y sin API. Hacer el repositorio opcional pasa antes por
 mudar ese fichero a `iAgents`, junto al Dockerfile y el supervisord, que es
 donde le corresponde estar.
 
+### Los tres modos de quedarse sin imagen nueva sin que falle nada
+
+La imagen la mantiene viva un aviso —cada repo hace `repository_dispatch` en
+cuanto su CI pasa en `main`— con el cron de respaldo. Los tres se rompían de
+formas que no se ven, y se reforzaban entre sí: el aviso roto obliga a depender
+del cron, el cron llega cuando quiere, y cuando llega puede encontrarse un repo
+en rojo que lo bloquea sin decírselo a nadie.
+
+**Un token que está y no vale no es lo mismo que no tenerlo.** El paso del aviso
+era `if [ -z "$GH_TOKEN" ] || ! gh api …; then echo "::warning::…"`, y ahí caben
+tres averías con la misma salida: secreto sin configurar, caducado y sin
+permisos. Las tres daban un aviso amarillo dentro de un job verde, y nadie mira
+los warnings de un job que pasó — el de `app_flutter` llevaba meses respondiendo
+403 en cada push. Hoy la ausencia anota y sigue (es una instalación que no
+participa) y **un 401/403 con el secreto puesto pone el job en rojo**. El precio
+está asumido: ese rojo aparece en el CI de otro repositorio y su autor no puede
+arreglarlo.
+
+**Y por eso el aviso vive en un job propio, no como un paso más.** En
+`app_flutter` era un paso de `validate` —con el argumento, entonces cierto, de
+que un job aparte gastaba otro runner para lo mismo—, y `validate` es
+justamente el check que el preflight exige en verde. En cuanto el aviso pasó a
+fallar, un token caducado tumbaba el veredicto sobre el código y el preflight
+se quedaba retrocediendo al commit anterior de Flutter mientras durase la
+avería. Son dos preguntas distintas —¿vale el código?, ¿llegó el aviso?— y
+necesitan dos jobs. `tests/test_aviso_upstream.py` guarda las tres reglas.
+
+**Un CI rojo no congela a los otros tres.** `verify` exige los cuatro checks en
+verde, así que un test caducado en cualquiera de ellos paraba la imagen entera
+—incluido lo ya validado de los demás—. Pasó el 30/08: un test con fecha fija
+salió de su ventana de 90 días y nadie tocó nada; doce horas sin publicar.
+`revision()` toma el `HEAD` de `main` y **solo retrocede al último verde cuando
+el check está en `failure`**. Un `pending` **no** retrocede, y esa distinción es
+el punto entero: el aviso llega con el CI todavía en curso, así que «el último
+verde» a secas publicaría el commit anterior en cada push y dejaría el aviso sin
+efecto. El retroceso es el remedio ante un rojo, no la política. Tiene tope
+(`MAX_COMMITS_ATRAS`, `MAX_HORAS_ATRAS`): pasado eso falla, porque publicar en
+silencio algo de anteayer es peor que no publicar. Y **`latest` deja de ser «la
+punta de `main`»**: los `*_COMMIT` horneados en la imagen son la única fuente de
+verdad de qué lleva dentro.
+
+**Y el fallo desatendido deja señal fuera de Actions.** El job
+`senal-de-la-cadena` abre una issue cuando falla un `schedule` o un
+`repository_dispatch` —los dos eventos que nadie mira—, **comenta en la que ya
+esté abierta** en vez de duplicarla, y la cierra cuando la cadena vuelve. Tres
+schedules fallidos seguidos serían tres issues del mismo problema, y ese ruido
+se aprende a ignorar igual que el warning que todo esto vino a quitar; una issue
+que sigue abierta después de arreglarse es ese mismo ruido por el otro lado.
+
+Lo que no toca: **subir la frecuencia del cron ni quitar la verificación de
+checks.** El cron no llega antes por pedirlo más veces —GitHub lo atrasa de 3 a
+8 h bajo carga, y está medido—, y publicar sin verificar es volver al punto que
+esta cadena vino a cerrar.
+
 ### Authorization is four dependencies
 
 `app/api/routes/auth/dependencies.py` defines the entire authorization surface,
