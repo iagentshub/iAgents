@@ -190,6 +190,16 @@ CI steps across four repos, so changing a flag meant four commits that landed at
 different times. `web_bundle_budget_test.dart` fails if a workflow goes back to
 calling `flutter build web` on its own.
 
+**Y quién compila no es la misma pregunta que si las dos mitades siguen de
+acuerdo.** Las guardas de arriba vigilan que la web salga del script; ninguna
+miraba el flag contra la CSP, así que quitar `--no-web-resources-cdn` dejaba la
+app autenticada en blanco con toda la suite en verde. Eso lo cierra ahora
+`iAgents/tests/test_csp_y_flags_de_la_web.py`, que lee los dos ficheros —de dos
+repositorios distintos— y falla en las dos direcciones: sin el flag exige
+`www.gstatic.com` en el `script-src` de `location ^~ /app/`, y con el flag exige
+que **no** esté, porque un permiso que nadie usa en la zona autenticada es
+superficie de más.
+
 **There are four callers, not three, and the fourth had no guard.** Besides the
 workflows, `gaia build-push` builds the same image from the command line — and
 it called `flutter build web` directly, so every image published that way served
@@ -291,14 +301,30 @@ Raising it means editing one file — and then re-measuring the web bundle, sinc
 deciding its own, reaching the sibling clones the way `test_backend.py` does and
 skipping the ones that are not there.
 
-### Two images, and only one of them ships
+### Tres imágenes publicadas, y el instalador ofrece cuatro modos
 
-`ghcr.io/iagentshub/app` is what `install.sh` pulls, built from
-`iAgents/docker/Dockerfile.unified` by **three** workflows — `iAgents`,
-`backend_fastapi` and `app_flutter` — each with its own "Preparar contexto de
-build" step — plus `gaia build-push`, which builds the same image from the
-command line. `ghcr.io/iagentshub/backend` is the standalone backend and almost
-nobody runs it. **A change to how the backend is packaged has to land in both.**
+Son **tres**, no dos, y cada una tiene su workflow:
+
+| Imagen | La publica | Quién la usa |
+|---|---|---|
+| `ghcr.io/iagentshub/app` | `iAgents` | la unificada: **la que corre en producción** (`docker-compose.hub.yml`) |
+| `ghcr.io/iagentshub/backend` | `backend_fastapi` | backend suelto (`docker-compose.backend.yml`), casi nadie |
+| `ghcr.io/iagentshub/frontend` | `frontend_react` | nginx suelto proxeando a un backend de otra máquina (`docker-compose.frontend.yml`), **y también el modelo code-sync** de `docker-compose.yml` |
+
+`install.sh` descarga uno de esos composes según el modo elegido, así que la
+tercera imagen no es un resto: sostiene dos de los cuatro modelos, y por eso
+`nginx.react.conf` no se puede mudar a `iAgents` sin romperla o sin invertir la
+dependencia — el `Dockerfile` de `frontend_react` la necesita para su propia
+imagen.
+
+**Solo `iAgents` construye la unificada.** Esta frase decía «tres workflows —
+`iAgents`, `backend_fastapi` y `app_flutter`, cada uno con su paso "Preparar
+contexto de build"», y llevaba tiempo siendo falsa: hoy `build-ctx` aparece en
+un único workflow. El otro camino, `gaia build-push`, sigue construyendo la
+misma imagen desde la línea de órdenes y por eso conserva sus guardas.
+
+`ghcr.io/iagentshub/backend` es el backend standalone. **A change to how the
+backend is packaged has to land in both.**
 The unified image installed from `requirements.txt` for a long time while the
 standalone used `requirements.lock` with `--require-hashes`: the image that
 actually reaches production had the weaker supply-chain guarantee, and nothing
