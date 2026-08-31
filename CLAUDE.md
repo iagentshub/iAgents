@@ -759,6 +759,101 @@ Unlimited is a warning in the startup audit (`body_limit`), because with nginx
 out of the way it is the only thing standing between a `await file.read()` and
 memory. Ver `docs/adr/011-un-solo-limite-de-tamano-y-lo-pone-el-admin.md`.
 
+### El panel de administración se pagina como todo lo demás
+
+Cuando se paginaron los listados del producto **el panel se quedó entero
+fuera**: once `GET` de `/api/admin` devolvían `SELECT … FROM tabla` sin `WHERE`
+y sin cota — los únicos del producto cuyo tamaño no lo decide un
+usuario, sino la instalación. **Se retiraron los once**: no los pedía ningún
+cliente, ni Flutter ni la extensión, así que no había bundle cacheado al que
+esperar.
+
+El inventario del panel se pide por `/api/v2/admin/explore`, que ya pagina y
+cubre los once tipos con columnas normalizadas. De los listados por tipo solo
+queda `/api/v2/admin/connections`, el único con consumidor: el selector de
+conexiones LLM de la importación oficial, que necesita el catálogo completo y
+lo recorre con el colector cursor. Los otros diez se escribieron y se retiraron
+en el mismo trabajo, al comprobar que ninguna pantalla los llamaba — una ruta
+publicada que nadie pide es superficie que mantener sin nadie a quien servir.
+
+**La clave keyset del panel lleva `owner_id`, no solo `id`.** Varias de esas
+tablas tienen PK compuesta `(id, owner_id)`. Para un usuario `id` basta, porque
+solo ve lo suyo; el administrador ve todos los dueños a la vez y ahí
+`(updated_at, id)` deja de ser única — y un keyset con clave repetida **se salta
+filas en el corte de página sin que nada falle**. Por eso estos listados usan
+`fetch_composite_cursor_page` y no el de dos columnas.
+
+`GET /api/admin/memory` traía la columna `content` —la memoria de largo plazo de
+cada agente de cada usuario, texto libre sin cota— para hacerle `len()` y
+tirarla. Hoy es `LENGTH(content)` en SQL. Es la misma lección que la mudanza del
+avatar, en otra tabla. La guarda que lo vigila mira **la proyección** de cada
+spec, no la respuesta: es ahí donde se decide qué cruza el cable.
+
+El nombre del dueño sale del `JOIN` (`list_groups` ya lo hacía) en vez de
+`_username_map`, que era `SELECT id, username FROM users` **llamado nueve veces
+por carga del panel**. Y los cuatro filtros del directorio de usuarios viajan a
+SQL: aplicarlos en Python sobre una página devuelve resultados incompletos sin
+que se note.
+
+**`connection_id` de un agente es una columna, no solo un campo del blob.** La
+pregunta «¿qué agentes usan esta conexión?» —la que hace el borrado de una
+orquestación— se resolvía trayendo **todos** los agentes de la instalación y
+filtrándolos en Python, mientras la pregunta equivalente sobre
+`user_agent_preferences` ya era un `COUNT(*)` dos líneas más abajo, en la misma
+función. La migración 45 promueve el campo, como ya estaban `name`, `scope` y
+`official_source_id`: **el JSON sigue siendo la fuente y la columna es su
+espejo**, mantenida por el upsert. Separarlas hace que el `COUNT` responda por
+un estado que ya no existe, y eso lo vigila
+`tests/storage/test_agente_conexion_columna.py`.
+
+**Y el arreglo de verdad estaba en el inventario, no en el listado.** Retirar
+los once dejó a la vista que `/api/v2/admin/explore` —el que el panel sí pide,
+desde que sus pestañas se migraron— arrastraba los mismos defectos que este
+trabajo venía a quitar del otro lado:
+
+- Hacía `SELECT *` sobre `memory_files` y `len(content)` en Python. **El
+  `len()` que motivó este punto seguía vivo justo donde se ejecuta**; quitarlo
+  del listado por tipo no lo tocaba. La proyección lleva ahora
+  `LENGTH(content)`, y la guarda mira la proyección.
+- No excluía a los invitados, así que aparecían y desaparecían del panel entre
+  dos recargas pese a la regla de arriba.
+- No servía `avatar_url` —la foto vive en `user_avatars`, no es una columna— ni
+  los recuentos que pinta la tarjeta de grupo (`member_count`, `agents_count`,
+  `status`…), así que el panel enseñaba iniciales y ceros. Los recuentos se
+  piden solo para los identificadores de la página.
+
+La lección para la próxima retirada: **el endpoint que se retira y el que se
+queda pueden compartir el defecto**, y arreglar solo el que se va deja el fallo
+donde de verdad corre.
+
+**Un índice del esquema sobre una columna nueva necesita las dos
+pre-migraciones.** El esquema se re-ejecuta entero en cada arranque y
+`CREATE TABLE IF NOT EXISTS` no añade columnas a una tabla que ya existe, así
+que su `CREATE INDEX` nombra una columna que en una base antigua no está.
+`_SCHEMA_INDEX_DEPS` es la lista que las añade antes — y hasta ahora **solo la
+leía SQLite**. En PostgreSQL, que es lo que corre en producción, no lo hacía
+nadie: una base existente respondía *column … does not exist* al crear el
+índice y **el backend no arrancaba**. Ahora hay `_pre_migrate_pg` leyendo la
+misma lista. Esto no lo ve una suite con la base recién creada, que es
+exactamente por qué apareció al probar contra el PostgreSQL del compose
+partiendo de una tabla anterior a la columna.
+
+**Contar recorriendo `AGENTS_DIR/*/config.json` da cero.** Son los ficheros que
+dejó la migración fichero→base de datos y nadie borró, así que en cualquier
+instalación creada después ese `glob` no encuentra nada. Estaba en dos sitios
+—el recuento de agentes por grupo y `agents_public`/`agents_private` de
+`GET /api/admin/stats`, que es la pantalla principal del panel—, y los dos
+enseñaban **cero agentes** sin que nada fallara. Los dos salen ya de la tabla.
+Lo único que aún lee esos ficheros es la migración que los importó y el borrado
+por RGPD que los limpia.
+
+**`tests/api/test_listados_con_cota.py` es lo que evita que vuelva a pasar.**
+Recorre `app/api/routes/` y falla si un `GET` devuelve `list[...]` sin `limit`
+ni `cursor`. Lo que ya estaba sin cota se declara en su `DEUDA` con el motivo
+—hoy solo listados acotados por el usuario que pregunta y catálogos de tamaño
+fijo—, y **esa lista solo puede encoger**: un segundo test falla si una entrada
+deja de corresponder a un listado real.
+
 ### Rate limiting
 
 **Every route limiter counts in the database, not in the process.** They are
