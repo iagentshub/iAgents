@@ -37,11 +37,19 @@ jobs:
       - name: Checkout del orquestador
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      # frontend_react es privado, y el GITHUB_TOKEN solo alcanza al repositorio
+      # que ejecuta este workflow: mientras los cuatro fueron públicos la API
+      # respondía sin permisos, y al privatizar uno este paso empezó a morir con
+      # 404. REPO_READ_TOKEN es un PAT que sí lo lee, y necesita permiso de
+      # lectura de contenido *y* de Actions: sin el segundo `resolve` pasa y es
+      # `verify` el que falla, más tarde y en otro sitio. Sin el secreto se cae
+      # de vuelta al token propio y falla en el primer repositorio privado, que
+      # es lo correcto: no hay forma de construir la imagen sin ese código.
       - name: Resolver revisiones exactas de main
         id: revisions
         run: python3 scripts/verified_revisions.py resolve
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.REPO_READ_TOKEN || github.token }}
 
       - name: Comprobar si la imagen ya contiene los repos actuales
         id: decide
@@ -80,7 +88,7 @@ jobs:
       - name: Esperar los checks de los SHAs empaquetados
         if: steps.decide.outputs.build == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.REPO_READ_TOKEN || github.token }}
           BACKEND_SHA: ${{ steps.revisions.outputs.backend_sha }}
           FRONTEND_SHA: ${{ steps.revisions.outputs.frontend_sha }}
           APP_SHA: ${{ steps.revisions.outputs.app_sha }}
@@ -122,6 +130,9 @@ jobs:
           repository: iagentshub/frontend_react
           ref: ${{ needs.preflight.outputs.frontend_sha }}
           path: frontend
+          # Repositorio privado: sin esto, checkout usa el GITHUB_TOKEN de
+          # iAgents, que no lo alcanza.
+          token: ${{ secrets.REPO_READ_TOKEN || github.token }}
 
       - name: Checkout Flutter app
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

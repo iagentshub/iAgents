@@ -17,6 +17,23 @@ ORGANIZATION = "iagentshub"
 REPOSITORIES = ("backend_fastapi", "frontend_react", "app_flutter", "iAgents")
 
 
+# Un repositorio privado no responde 403 al token que no lo alcanza: responde
+# 404, indistinguible de uno que no existe. Al privatizar frontend_react la
+# cadena entera murió aquí, y el mensaje pelado no decía de dónde venía: hubo
+# que abrir el código para saber qué mirar.
+_PISTAS = {
+    401: " (token inválido o caducado)",
+    403: " (el token no tiene permiso; un repositorio privado necesita lectura"
+    " de contenido y de Actions)",
+    404: " (repositorio o referencia inexistente — o privado y fuera del alcance"
+    " del token: a quien no puede verlo, GitHub le responde 404, no 403)",
+}
+
+
+def _pista(codigo: int) -> str:
+    return _PISTAS.get(codigo, "")
+
+
 class GitHubAPI:
     def __init__(
         self,
@@ -40,7 +57,7 @@ class GitHubAPI:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             raise RuntimeError(
-                f"GitHub API devolvio HTTP {exc.code} para {path}"
+                f"GitHub API devolvio HTTP {exc.code} para {path}{_pista(exc.code)}"
             ) from exc
 
     def main_sha(self, repository: str) -> str:
@@ -49,14 +66,33 @@ class GitHubAPI:
         )
         return str(payload["object"]["sha"])
 
-    def check_state(self, repository: str, sha: str, check_name: str) -> str:
-        payload = self.get(
-            f"/repos/{ORGANIZATION}/{repository}/commits/{sha}/check-runs?per_page=100"
+    def jobs(self, repository: str, sha: str) -> list[dict[str, Any]]:
+        """Los jobs de Actions de un commit, por los workflow runs que lo tocaron."""
+        runs = self.get(
+            f"/repos/{ORGANIZATION}/{repository}/actions/runs"
+            f"?head_sha={sha}&per_page=100"
         )
-        runs = [run for run in payload.get("check_runs", []) if run["name"] == check_name]
-        if any(run.get("conclusion") == "success" for run in runs):
+        found: list[dict[str, Any]] = []
+        for run in runs.get("workflow_runs", []):
+            payload = self.get(
+                f"/repos/{ORGANIZATION}/{repository}/actions/runs/{run['id']}"
+                f"/jobs?per_page=100"
+            )
+            found.extend(payload.get("jobs", []))
+        return found
+
+    # Esto leía /commits/{sha}/check-runs, que es la Checks API — y GitHub la
+    # reservó a las GitHub Apps: el permiso «Checks» no se le puede dar a un PAT
+    # fine-grained, así que con frontend_react privado no había credencial
+    # acotada capaz de verificarlo. La API de Actions responde lo mismo para lo
+    # que aquí importa —los cuatro checks exigidos son jobs de Actions— y su
+    # permiso «Actions: read» sí es asignable. Cuesta una llamada más por
+    # workflow run, y `verify` solo reconsulta lo que sigue pendiente.
+    def check_state(self, repository: str, sha: str, check_name: str) -> str:
+        jobs = [job for job in self.jobs(repository, sha) if job["name"] == check_name]
+        if any(job.get("conclusion") == "success" for job in jobs):
             return "success"
-        if not runs or any(run.get("status") != "completed" for run in runs):
+        if not jobs or any(job.get("status") != "completed" for job in jobs):
             return "pending"
         return "failure"
 
