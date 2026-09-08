@@ -46,7 +46,7 @@ def _workflows_con_build_ctx(raiz: Path) -> list[Path]:
     wf = raiz / ".github" / "workflows"
     if not wf.is_dir():
         return []
-    return [f for f in sorted(wf.glob("*.yml")) if "build-ctx" in f.read_text()]
+    return [f for f in sorted(wf.glob("*.yml")) if "build-ctx" in f.read_text(encoding="utf-8")]
 
 
 def test_dockerignore_unified_exists():
@@ -58,7 +58,7 @@ def test_dockerignore_unified_exists():
 
 def test_dockerignore_unified_whitelists_backend():
     """La lista blanca incluye runtime y tests, pero mantiene .git fuera."""
-    contenido = (DOCKER_DIR / "dockerignore.unified").read_text()
+    contenido = (DOCKER_DIR / "dockerignore.unified").read_text(encoding="utf-8")
     assert "backend/*" in contenido, (
         "Falta el patron 'backend/*': sin el, las lineas '!backend/...' no "
         "reincluyen nada y el directorio entra completo."
@@ -78,7 +78,7 @@ def test_dockerignore_unified_whitelists_backend():
 def test_dockerfile_unified_verifica_la_coleccion_de_centinel():
     instrucciones = [
         ln.strip()
-        for ln in (DOCKER_DIR / "Dockerfile.unified").read_text().splitlines()
+        for ln in (DOCKER_DIR / "Dockerfile.unified").read_text(encoding="utf-8").splitlines()
         if ln.strip() and not ln.lstrip().startswith("#")
     ]
     contenido = "\n".join(instrucciones)
@@ -96,7 +96,7 @@ def test_dockerfile_unified_instala_desde_el_lock():
     # requirements.txt justamente para explicar por que ya no se usa.
     instrucciones = [
         ln
-        for ln in (DOCKER_DIR / "Dockerfile.unified").read_text().splitlines()
+        for ln in (DOCKER_DIR / "Dockerfile.unified").read_text(encoding="utf-8").splitlines()
         if ln.strip() and not ln.lstrip().startswith("#")
     ]
     contenido = "\n".join(instrucciones)
@@ -129,7 +129,7 @@ def test_gaia_build_push_compila_la_web_con_el_script():
     if not build_push.is_file():
         pytest.skip("gaia_cli/build_push.py ya no existe")
 
-    contenido = build_push.read_text()
+    contenido = build_push.read_text(encoding="utf-8")
     if "flutter" not in contenido:
         pytest.skip("build_push.py ya no compila la web")
 
@@ -158,7 +158,7 @@ def test_gaia_build_push_copia_el_dockerignore():
     if not build_push.is_file():
         pytest.skip("gaia_cli/build_push.py ya no existe")
 
-    contenido = build_push.read_text()
+    contenido = build_push.read_text(encoding="utf-8")
     if "Dockerfile.unified" not in contenido:
         pytest.skip("build_push.py ya no construye la imagen unificada")
 
@@ -175,7 +175,7 @@ def test_iagents_es_el_unico_workflow_que_publica_la_imagen_unificada():
         if not raiz.is_dir():
             continue
         for workflow in (raiz / ".github" / "workflows").glob("*.yml"):
-            if "ghcr.io/iagentshub/app:latest" in workflow.read_text():
+            if "ghcr.io/iagentshub/app:latest" in workflow.read_text(encoding="utf-8"):
                 publicadores.append((repo, workflow.name))
 
     assert publicadores == [("iAgents", "docker-publish.yml")], (
@@ -196,7 +196,7 @@ def test_los_workflows_copian_el_dockerignore(repo):
         pytest.skip(f"{repo} ya no prepara ningun build-ctx")
 
     for wf in workflows:
-        assert "dockerignore.unified" in wf.read_text(), (
+        assert "dockerignore.unified" in wf.read_text(encoding="utf-8"), (
             f"{repo}/.github/workflows/{wf.name} prepara un build-ctx pero no "
             "copia docker/dockerignore.unified como build-ctx/.dockerignore. "
             "La imagen se publicaria con docs/, .git y basura del runner, y "
@@ -221,13 +221,13 @@ def test_flutter_se_instala_con_la_version_del_pubspec(repo):
         pytest.skip(f"{repo} no tiene workflows")
 
     con_flutter = [
-        f for f in sorted(wf_dir.glob("*.yml")) if "subosito/flutter-action" in f.read_text()
+        f for f in sorted(wf_dir.glob("*.yml")) if "subosito/flutter-action" in f.read_text(encoding="utf-8")
     ]
     if not con_flutter:
         pytest.skip(f"{repo} no instala Flutter en ningun workflow")
 
     for wf in con_flutter:
-        contenido = wf.read_text()
+        contenido = wf.read_text(encoding="utf-8")
         assert "flutter-version-file" in contenido, (
             f"{repo}/.github/workflows/{wf.name} instala Flutter sin "
             "flutter-version-file: toma la version de 'channel: stable', que "
@@ -250,7 +250,7 @@ def test_el_pubspec_de_app_flutter_fija_una_version_exacta():
         pytest.skip("app_flutter no esta clonado junto a este repositorio")
 
     assert re.search(
-        r"^\s*flutter:\s*\d+\.\d+\.\d+\s*$", pubspec.read_text(), re.MULTILINE
+        r"^\s*flutter:\s*\d+\.\d+\.\d+\s*$", pubspec.read_text(encoding="utf-8"), re.MULTILINE
     ), (
         "app_flutter/pubspec.yaml tiene que declarar 'flutter: X.Y.Z' exacto "
         "dentro de 'environment'. Es lo que leen los workflows, y la "
