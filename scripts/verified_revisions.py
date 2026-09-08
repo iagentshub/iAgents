@@ -34,6 +34,16 @@ CHECKS = {
 MAX_COMMITS_ATRAS = 20
 MAX_HORAS_ATRAS = 24
 
+# GitHub devuelve 502/503 sueltos con cierta regularidad; uno a los 25 minutos
+# de espera tiraba la publicación entera. Se reintenta con pausa creciente.
+REINTENTOS_5XX = 3
+PAUSA_REINTENTO_SEGUNDOS = 5.0
+
+# La API pagina a 100 runs. Un SHA de main que no cambia acumula un run de
+# docker-publish por hora (cron) más uno por aviso: en cuatro días el run de
+# `Validate` ya no cabe en la primera página.
+RUNS_POR_PAGINA = 100
+
 
 # Un repositorio privado no responde 403 al token que no lo alcanza: responde
 # 404, indistinguible de uno que no existe. Al privatizar frontend_react la
@@ -48,8 +58,16 @@ _PISTAS = {
 }
 
 
-def _pista(codigo: int) -> str:
-    return _PISTAS.get(codigo, "")
+def _pista(exc: urllib.error.HTTPError) -> str:
+    # Un 403 con la cuota a cero no es un problema de permisos: es que se ha
+    # preguntado demasiado. Pasó al sondear cada 15 s los jobs de cien runs.
+    cabeceras = exc.headers or {}
+    if exc.code == 403 and str(cabeceras.get("X-RateLimit-Remaining", "")) == "0":
+        return (
+            " (limite de peticiones de la API agotado; se reanuda en "
+            f"X-RateLimit-Reset={cabeceras.get('X-RateLimit-Reset', '?')})"
+        )
+    return _PISTAS.get(exc.code, "")
 
 
 class GitHubAPI:
@@ -60,8 +78,11 @@ class GitHubAPI:
     ) -> None:
         self._token = token
         self._opener = opener
+        # Los jobs de un run ya completado no cambian: `verify` sondea cada
+        # 15 s y sin esto volvía a pedir los cien runs cerrados en cada vuelta.
+        self._jobs_de_run_cerrado: dict[int, list[dict[str, Any]]] = {}
 
-    def get(self, path: str) -> dict[str, Any]:
+    def get(self, path: str) -> Any:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -70,13 +91,21 @@ class GitHubAPI:
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         request = urllib.request.Request(f"{API_ROOT}{path}", headers=headers)
-        try:
-            with self._opener(request, timeout=30) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(
-                f"GitHub API devolvio HTTP {exc.code} para {path}{_pista(exc.code)}"
-            ) from exc
+        for intento in range(1, REINTENTOS_5XX + 1):
+            try:
+                with self._opener(request, timeout=30) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                if exc.code < 500 or intento == REINTENTOS_5XX:
+                    raise RuntimeError(
+                        f"GitHub API devolvio HTTP {exc.code} para {path}{_pista(exc)}"
+                    ) from exc
+                print(
+                    f"::warning::GitHub API devolvio HTTP {exc.code} para {path}; "
+                    f"reintento {intento}/{REINTENTOS_5XX - 1}"
+                )
+                time.sleep(PAUSA_REINTENTO_SEGUNDOS * intento)
+        raise AssertionError("unreachable")
 
     def main_sha(self, repository: str) -> str:
         payload = self.get(
@@ -84,19 +113,36 @@ class GitHubAPI:
         )
         return str(payload["object"]["sha"])
 
+    def runs(self, repository: str, sha: str) -> list[dict[str, Any]]:
+        """Todos los workflow runs de un commit, página a página."""
+        found: list[dict[str, Any]] = []
+        pagina = 1
+        while True:
+            payload = self.get(
+                f"/repos/{ORGANIZATION}/{repository}/actions/runs"
+                f"?head_sha={sha}&per_page={RUNS_POR_PAGINA}&page={pagina}"
+            )
+            runs = payload.get("workflow_runs", [])
+            found.extend(runs)
+            if len(runs) < RUNS_POR_PAGINA:
+                return found
+            pagina += 1
+
     def jobs(self, repository: str, sha: str) -> list[dict[str, Any]]:
         """Los jobs de Actions de un commit, por los workflow runs que lo tocaron."""
-        runs = self.get(
-            f"/repos/{ORGANIZATION}/{repository}/actions/runs"
-            f"?head_sha={sha}&per_page=100"
-        )
         found: list[dict[str, Any]] = []
-        for run in runs.get("workflow_runs", []):
-            payload = self.get(
-                f"/repos/{ORGANIZATION}/{repository}/actions/runs/{run['id']}"
-                f"/jobs?per_page=100"
-            )
-            found.extend(payload.get("jobs", []))
+        for run in self.runs(repository, sha):
+            run_id = int(run["id"])
+            jobs = self._jobs_de_run_cerrado.get(run_id)
+            if jobs is None:
+                payload = self.get(
+                    f"/repos/{ORGANIZATION}/{repository}/actions/runs/{run_id}"
+                    f"/jobs?per_page=100"
+                )
+                jobs = list(payload.get("jobs", []))
+                if run.get("status") == "completed":
+                    self._jobs_de_run_cerrado[run_id] = jobs
+            found.extend(jobs)
         return found
 
     # Esto leía /commits/{sha}/check-runs, que es la Checks API — y GitHub la

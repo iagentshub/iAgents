@@ -222,3 +222,94 @@ def test_los_checks_se_declaran_una_sola_vez():
     declarados = dict(re.findall(r'--require "(\w+):\$\w+:(\w+)"', workflow))
 
     assert declarados == CHECKS
+
+
+def test_los_jobs_recorren_todas_las_paginas_de_runs():
+    """El mismo SHA acumula runs de docker-publish cada hora: el `validate` que
+    importa se cae de la primera página a los cuatro días y el check parecía
+    pendiente para siempre."""
+    pedidas: list[str] = []
+    pagina_1 = {"workflow_runs": [{"id": n, "status": "completed"} for n in range(100)]}
+    pagina_2 = {"workflow_runs": [{"id": 100, "status": "completed"}]}
+    jobs_publish = {"jobs": [job("preflight")]}
+    jobs_validate = {"jobs": [job("validate")]}
+
+    def open_request(request, timeout):
+        assert timeout == 30
+        pedidas.append(request.full_url)
+        if "/actions/runs?" in request.full_url:
+            return Response(pagina_2 if "page=2" in request.full_url else pagina_1)
+        if "/runs/100/jobs" in request.full_url:
+            return Response(jobs_validate)
+        return Response(jobs_publish)
+
+    api = GitHubAPI(opener=open_request)
+
+    assert api.check_state("iAgents", "a" * 40, "validate") == "success"
+    assert any("page=2" in url for url in pedidas)
+    assert not any("page=3" in url for url in pedidas)
+
+
+def test_verify_no_reconsulta_los_jobs_de_runs_terminados(monkeypatch):
+    """Sondear cada 15 s los jobs de cien runs ya cerrados agotó el límite de
+    la API (403) a mitad de espera. Un run completado no cambia: se pide una vez."""
+    pedidas: list[str] = []
+    runs = {
+        "workflow_runs": [
+            {"id": 1, "status": "completed"},
+            {"id": 2, "status": "in_progress"},
+        ]
+    }
+    estado_run_2 = iter(
+        [
+            {"jobs": [job("validate", conclusion=None, status="in_progress")]},
+            {"jobs": [job("validate")]},
+        ]
+    )
+
+    def open_request(request, timeout):
+        assert timeout == 30
+        pedidas.append(request.full_url)
+        if "/actions/runs?" in request.full_url:
+            return Response(runs)
+        if "/runs/1/jobs" in request.full_url:
+            return Response({"jobs": [job("preflight")]})
+        return Response(next(estado_run_2))
+
+    monkeypatch.setattr("scripts.verified_revisions.time.sleep", lambda _seconds: None)
+    api = GitHubAPI(opener=open_request)
+
+    verify(api, [("iAgents", "a" * 40, "validate")], timeout_seconds=5, poll_seconds=0)
+
+    assert sum("/runs/1/jobs" in url for url in pedidas) == 1
+    assert sum("/runs/2/jobs" in url for url in pedidas) == 2
+
+
+def test_un_5xx_de_github_se_reintenta(monkeypatch):
+    """Un 502 aislado a los 25 minutos de espera tiraba la publicación entera."""
+    intentos = {"n": 0}
+
+    def open_request(request, timeout):
+        assert timeout == 30
+        intentos["n"] += 1
+        if intentos["n"] == 1:
+            raise urllib.error.HTTPError(request.full_url, 502, "Bad Gateway", {}, None)
+        return Response({"object": {"sha": "b" * 40}})
+
+    monkeypatch.setattr("scripts.verified_revisions.time.sleep", lambda _seconds: None)
+
+    assert GitHubAPI(opener=open_request).main_sha("backend_fastapi") == "b" * 40
+    assert intentos["n"] == 2
+
+
+def test_el_403_por_limite_de_peticiones_lo_dice():
+    """Un 403 por cuota agotada no es un problema de permisos del token."""
+
+    def open_request(request, timeout):
+        assert timeout == 30
+        raise urllib.error.HTTPError(
+            request.full_url, 403, "Forbidden", {"X-RateLimit-Remaining": "0"}, None
+        )
+
+    with pytest.raises(RuntimeError, match="limite de peticiones"):
+        GitHubAPI(opener=open_request).main_sha("iAgents")
